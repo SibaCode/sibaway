@@ -60,67 +60,135 @@ function Login() {
 
   return (
     <div className="login-container">
-      <form onSubmit={handleSubmit} className="login-form">
-        <h1>🚀 SibaWay</h1>
-        <h2 style={{textAlign: 'center', color: 'var(--navy)'}}>Admin Portal</h2>
-        
-        {error && <div style={{color: 'var(--danger)', textAlign: 'center', marginBottom: '1rem'}}>{error}</div>}
-        
-        <div className="form-group">
-          <label className="form-label">Email</label>
-          <input
-            type="email"
-            className="form-control"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+      <div className="login-background">
+        <div className="login-background-shapes">
+          <div className="shape shape-1"></div>
+          <div className="shape shape-2"></div>
+          <div className="shape shape-3"></div>
         </div>
-        
-        <div className="form-group">
-          <label className="form-label">Password</label>
-          <input
-            type="password"
-            className="form-control"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        
-        <button 
-          type="submit" 
-          className="btn btn-primary"
-          disabled={loading}
-          style={{width: '100%'}}
-        >
-          {loading ? 'Signing In...' : 'Sign In'}
-        </button>
-        
-        <div style={{marginTop: '2rem'}}>
-          <h4 style={{textAlign: 'center', marginBottom: '1rem', color: 'var(--navy)'}}>Quick Access:</h4>
-          
-          <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
-            <button 
-              type="button"
-              className="btn btn-outline"
-              onClick={() => fillDemoCredentials('superadmin')}
-            >
-              👑 Super Admin
-            </button>
+      </div>
+      
+      <div className="login-content">
+        <form onSubmit={handleSubmit} className="login-form">
+          {/* Header Section */}
+          <div className="login-header">
+            <div className="logo-container">
+              <div className="logo-icon">🚀</div>
+              <div className="logo-text">
+                <h1>SibaWay</h1>
+                <p>Education Platform</p>
+              </div>
+            </div>
+            <div className="welcome-section">
+              <h2>Welcome Back!</h2>
+              <p>Sign in to your admin dashboard</p>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="error-message">
+              <div className="error-icon">⚠️</div>
+              <div className="error-text">
+                <strong>Login Failed</strong>
+                <p>{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Form Fields */}
+          <div className="form-section">
+            <div className="form-group">
+              <label className="form-label">
+                <span className="label-icon">📧</span>
+                Email Address
+              </label>
+              <input
+                type="email"
+                className="form-control"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
             
+            <div className="form-group">
+              <label className="form-label">
+                <span className="label-icon">🔒</span>
+                Password
+              </label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* Login Button */}
             <button 
-              type="button"
-              className="btn btn-outline"
-              onClick={() => fillDemoCredentials('orgadmin')}
+              type="submit" 
+              className={`btn btn-primary login-btn ${loading ? 'loading' : ''}`}
+              disabled={loading}
             >
-              💼 Business Owner
+              {loading ? (
+                <>
+                  <div className="btn-spinner"></div>
+                  Signing In...
+                </>
+              ) : (
+                <>
+                  <span className="btn-icon">→</span>
+                  Sign In to Dashboard
+                </>
+              )}
             </button>
           </div>
-        </div>
-        
-        {/* REMOVED: Registration link */}
-      </form>
+
+          {/* Quick Access Section */}
+          <div className="quick-access-section">
+            <div className="section-divider">
+              <span>Quick Access</span>
+            </div>
+            
+            <div className="demo-buttons">
+              <button 
+                type="button"
+                className="demo-btn super-admin-btn"
+                onClick={() => fillDemoCredentials('superadmin')}
+              >
+                <div className="demo-btn-icon">👑</div>
+                <div className="demo-btn-content">
+                  <div className="demo-btn-title">Super Admin</div>
+                  <div className="demo-btn-subtitle">Full platform access</div>
+                </div>
+                <div className="demo-btn-arrow">→</div>
+              </button>
+              
+              <button 
+                type="button"
+                className="demo-btn business-owner-btn"
+                onClick={() => fillDemoCredentials('orgadmin')}
+              >
+                <div className="demo-btn-icon">💼</div>
+                <div className="demo-btn-content">
+                  <div className="demo-btn-title">Business Owner</div>
+                  <div className="demo-btn-subtitle">Manage classes & students</div>
+                </div>
+                <div className="demo-btn-arrow">→</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="login-footer">
+            <p>Secure admin portal • Powered by SibaWay</p>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

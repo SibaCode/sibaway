@@ -34,10 +34,18 @@ function OrgAdminDashboard() {
     capacity: '',
     schedule: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    venue: ''
   });
 
   const [editingClass, setEditingClass] = useState(null);
+
+  // Debug userData
+  useEffect(() => {
+    console.log('User Data:', userData);
+    console.log('Organization Name:', userData?.organizationName);
+    console.log('Organization ID:', userData?.organizationId);
+  }, [userData]);
 
   useEffect(() => {
     if (userData?.organizationId) {
@@ -94,7 +102,7 @@ function OrgAdminDashboard() {
         return {
           id: regDoc.id,
           ...regData,
-          class: classDoc.data()
+          class: classDoc.exists() ? classDoc.data() : { name: 'Class Not Found' }
         };
       })
     );
@@ -106,7 +114,7 @@ function OrgAdminDashboard() {
         return {
           id: regDoc.id,
           ...regData,
-          class: classDoc.data()
+          class: classDoc.exists() ? classDoc.data() : { name: 'Class Not Found' }
         };
       })
     );
@@ -115,84 +123,119 @@ function OrgAdminDashboard() {
     setApprovedRegistrations(approvedData);
   };
 
-  // Class Management Functions
-const createClass = async (e) => {
-  e.preventDefault();
-  
-  try {
-    // Generate URL-friendly slugs
-    const generateSlug = (text) => {
-      return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)+/g, '')
-        .substring(0, 30);
-    };
-
-    // Get business slug (from business name)
-    const businessSlug = generateSlug(userData.organizationName || 'business');
+  // Class Management Functions - FIXED VERSION
+  const createClass = async (e) => {
+    e.preventDefault();
     
-    // Generate course slug
-    let courseSlug = generateSlug(classForm.name);
-    let finalCourseSlug = courseSlug;
-    let counter = 1;
+    try {
+      // Validate required fields
+      if (!classForm.name || !classForm.price || !classForm.venue || !classForm.paymentInstructions) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+      }
 
-    // Check for slug collisions
-    const existingClasses = await getDocs(collection(db, 'classes'));
-    const existingSlugs = existingClasses.docs.map(doc => doc.data().courseSlug).filter(Boolean);
-    
-    while (existingSlugs.includes(finalCourseSlug)) {
-      finalCourseSlug = `${courseSlug}-${counter}`;
-      counter++;
+      // Validate user data
+      if (!userData?.organizationId) {
+        showNotification('User organization data is missing. Please log out and log in again.', 'error');
+        return;
+      }
+
+      // Generate URL-friendly slugs with better null handling
+      const generateSlug = (text) => {
+        if (!text || text.trim() === '') return 'business';
+        return text
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '')
+          .substring(0, 30);
+      };
+
+      // Get business name with multiple fallbacks
+      const getBusinessName = () => {
+        return userData?.organizationName || userData?.name || 'My Business';
+      };
+
+      const businessName = getBusinessName();
+      const businessSlug = generateSlug(businessName);
+      
+      // Generate course slug
+      let courseSlug = generateSlug(classForm.name);
+      let finalCourseSlug = courseSlug;
+      let counter = 1;
+
+      // Check for slug collisions
+      const existingClassesQuery = query(
+        collection(db, 'classes'),
+        where('organizationId', '==', userData.organizationId)
+      );
+      const existingClassesSnapshot = await getDocs(existingClassesQuery);
+      const existingSlugs = existingClassesSnapshot.docs.map(doc => doc.data().courseSlug).filter(Boolean);
+      
+      while (existingSlugs.includes(finalCourseSlug)) {
+        finalCourseSlug = `${courseSlug}-${counter}`;
+        counter++;
+      }
+
+      // Generate venue slug
+      const venueSlug = generateSlug(classForm.venue || 'online');
+      
+      // Generate date slug (use start date or current date)
+      const dateSlug = classForm.startDate 
+        ? classForm.startDate.replace(/-/g, '')
+        : new Date().toISOString().split('T')[0].replace(/-/g, '');
+
+      const classId = uuidv4();
+      const registrationLink = `${window.location.origin}/${businessSlug}/${finalCourseSlug}/${venueSlug}/${dateSlug}`;
+      
+      // Create class data with proper fallbacks
+      const classData = {
+        name: classForm.name,
+        description: classForm.description,
+        price: parseFloat(classForm.price),
+        paymentInstructions: classForm.paymentInstructions,
+        capacity: classForm.capacity ? parseInt(classForm.capacity) : null,
+        schedule: classForm.schedule || '',
+        startDate: classForm.startDate || '',
+        endDate: classForm.endDate || '',
+        venue: classForm.venue,
+        id: classId,
+        businessSlug: businessSlug,
+        courseSlug: finalCourseSlug,
+        venueSlug: venueSlug,
+        dateSlug: dateSlug,
+        organizationId: userData.organizationId,
+        organizationName: businessName,
+        registrationLink,
+        createdAt: new Date(),
+        status: 'active',
+        enrolledCount: 0
+      };
+
+      console.log('Creating class with data:', classData);
+      
+      await addDoc(collection(db, 'classes'), classData);
+      
+      setShowCreateClass(false);
+      setClassForm({ 
+        name: '', 
+        description: '', 
+        price: '', 
+        paymentInstructions: '',
+        capacity: '',
+        schedule: '',
+        startDate: '',
+        endDate: '',
+        venue: ''
+      });
+      fetchClasses();
+      showNotification('Class created successfully!');
+    } catch (error) {
+      console.error('Error creating class:', error);
+      showNotification('Error creating class: ' + error.message, 'error');
     }
+  };
 
-    // Generate venue slug
-    const venueSlug = generateSlug(classForm.venue || 'online');
-    
-    // Generate date slug (use start date or current date)
-    const dateSlug = classForm.startDate 
-      ? classForm.startDate.replace(/-/g, '')
-      : new Date().toISOString().split('T')[0].replace(/-/g, '');
-
-    const classId = uuidv4();
-    const registrationLink = `${window.location.origin}/${businessSlug}/${finalCourseSlug}/${venueSlug}/${dateSlug}`;
-    
-    await addDoc(collection(db, 'classes'), {
-      ...classForm,
-      id: classId,
-      businessSlug: businessSlug,
-      courseSlug: finalCourseSlug,
-      venueSlug: venueSlug,
-      dateSlug: dateSlug,
-      organizationId: userData.organizationId,
-      organizationName: userData.organizationName, // Make sure this is stored
-      registrationLink,
-      createdAt: new Date(),
-      price: parseFloat(classForm.price),
-      capacity: classForm.capacity ? parseInt(classForm.capacity) : null,
-      status: 'active',
-      enrolledCount: 0
-    });
-    
-    setShowCreateClass(false);
-    setClassForm({ 
-      name: '', 
-      description: '', 
-      price: '', 
-      paymentInstructions: '',
-      capacity: '',
-      schedule: '',
-      startDate: '',
-      endDate: '',
-      venue: '' // ADD THIS FIELD
-    });
-    fetchClasses();
-    showNotification('Class created successfully!');
-  } catch (error) {
-    console.error('Error creating class:', error);
-    showNotification('Error creating class', 'error');
-  }
-};
   const editClass = (classItem) => {
     setEditingClass(classItem);
     setClassForm({
@@ -203,7 +246,8 @@ const createClass = async (e) => {
       capacity: classItem.capacity?.toString() || '',
       schedule: classItem.schedule || '',
       startDate: classItem.startDate || '',
-      endDate: classItem.endDate || ''
+      endDate: classItem.endDate || '',
+      venue: classItem.venue || ''
     });
     setShowEditClass(true);
   };
@@ -229,7 +273,8 @@ const createClass = async (e) => {
         capacity: '',
         schedule: '',
         startDate: '',
-        endDate: ''
+        endDate: '',
+        venue: ''
       });
       fetchClasses();
       showNotification('Class updated successfully!');
@@ -241,34 +286,58 @@ const createClass = async (e) => {
 
   const duplicateClass = async (classItem) => {
     try {
-      // Generate new slug for duplicated class
-      const generateSlug = (name) => {
-        return name
+      // Generate URL-friendly slugs with better null handling
+      const generateSlug = (text) => {
+        if (!text || text.trim() === '') return 'business';
+        return text
           .toLowerCase()
+          .trim()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)+/g, '')
-          .substring(0, 50);
+          .substring(0, 30);
       };
+
+      // Get business name with multiple fallbacks
+      const getBusinessName = () => {
+        return userData?.organizationName || userData?.name || 'My Business';
+      };
+
+      const businessName = getBusinessName();
+      const businessSlug = generateSlug(businessName);
 
       let baseSlug = generateSlug(`${classItem.name}-copy`);
       let finalSlug = baseSlug;
       let counter = 1;
 
-      const existingClasses = await getDocs(collection(db, 'classes'));
-      const existingSlugs = existingClasses.docs.map(doc => doc.data().slug).filter(Boolean);
+      const existingClassesQuery = query(
+        collection(db, 'classes'),
+        where('organizationId', '==', userData.organizationId)
+      );
+      const existingClassesSnapshot = await getDocs(existingClassesQuery);
+      const existingSlugs = existingClassesSnapshot.docs.map(doc => doc.data().courseSlug).filter(Boolean);
       
       while (existingSlugs.includes(finalSlug)) {
         finalSlug = `${baseSlug}-${counter}`;
         counter++;
       }
 
+      const venueSlug = generateSlug(classItem.venue || 'online');
+      const dateSlug = classItem.startDate 
+        ? classItem.startDate.replace(/-/g, '')
+        : new Date().toISOString().split('T')[0].replace(/-/g, '');
+
       const newClassId = uuidv4();
-      const registrationLink = `${window.location.origin}/join/${finalSlug}`;
+      const registrationLink = `${window.location.origin}/${businessSlug}/${finalSlug}/${venueSlug}/${dateSlug}`;
       
       await addDoc(collection(db, 'classes'), {
         ...classItem,
         id: newClassId,
-        slug: finalSlug,
+        businessSlug: businessSlug,
+        courseSlug: finalSlug,
+        venueSlug: venueSlug,
+        dateSlug: dateSlug,
+        organizationId: userData.organizationId,
+        organizationName: businessName,
         registrationLink,
         createdAt: new Date(),
         name: `${classItem.name} (Copy)`,
@@ -382,7 +451,7 @@ const createClass = async (e) => {
         </div>
         <div className="navbar-actions">
           <button onClick={logout} className="btn btn-outline btn-sm">
-            Logout ({userData?.name})
+            Logout ({userData?.name || 'User'})
           </button>
         </div>
       </nav>
@@ -409,7 +478,7 @@ const createClass = async (e) => {
             <div className="stat-card">
               <div className="stat-icon">💰</div>
               <div className="stat-content">
-                <div className="stat-number">R{totalRevenue}</div>
+                <div className="stat-number">R{totalRevenue.toFixed(2)}</div>
                 <div className="stat-label">Total Revenue</div>
               </div>
             </div>
@@ -513,10 +582,12 @@ const createClass = async (e) => {
                           <span className="label">Enrolled:</span>
                           <span className="value">{classItem.enrolledCount || 0} students</span>
                         </div>
-                        {classItem.slug && (
+                        {classItem.registrationLink && (
                           <div className="info-item">
-                            <span className="label">URL Slug:</span>
-                            <span className="value code">/join/{classItem.slug}</span>
+                            <span className="label">Registration Link:</span>
+                            <span className="value code" style={{fontSize: '0.7rem'}}>
+                              {classItem.registrationLink.substring(0, 40)}...
+                            </span>
                           </div>
                         )}
                       </div>
@@ -570,7 +641,7 @@ const createClass = async (e) => {
             <div className="section-header">
               <h2>Pending Registrations ({pendingRegistrations.length})</h2>
               <div className="revenue-badge">
-                Pending Revenue: ${pendingRevenue}
+                Pending Revenue: R{pendingRevenue.toFixed(2)}
               </div>
             </div>
 
@@ -601,7 +672,7 @@ const createClass = async (e) => {
                         </div>
                         <div className="info-item">
                           <span className="label">Class:</span>
-                          <span className="value">{reg.name}</span>
+                          <span className="value">{reg.class?.name}</span>
                         </div>
                         <div className="info-item">
                           <span className="label">Amount Paid:</span>
@@ -658,7 +729,7 @@ const createClass = async (e) => {
             <div className="section-header">
               <h2>Approved Students ({approvedRegistrations.length})</h2>
               <div className="revenue-badge">
-                Total Revenue: R{totalRevenue}
+                Total Revenue: R{totalRevenue.toFixed(2)}
               </div>
             </div>
 
@@ -693,7 +764,7 @@ const createClass = async (e) => {
                         </div>
                         <div className="info-item">
                           <span className="label">Amount Paid:</span>
-                          <span className="value">${reg.amountPaid}</span>
+                          <span className="value">R{reg.amountPaid}</span>
                         </div>
                         <div className="info-item">
                           <span className="label">Approved On:</span>
@@ -766,7 +837,8 @@ const createClass = async (e) => {
                       capacity: '',
                       schedule: '',
                       startDate: '',
-                      endDate: ''
+                      endDate: '',
+                      venue: ''
                     });
                   }}
                 >
@@ -800,7 +872,7 @@ const createClass = async (e) => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Price *</label>
+                    <label className="form-label">Price (R) *</label>
                     <input
                       type="number"
                       step="0.01"
