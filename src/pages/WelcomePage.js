@@ -14,20 +14,21 @@ const WelcomePage = () => {
       <div className="hero-content">
         <div className="container">
           <div className="hero-text">
-            <div className="hero-badge">
+            {/* <div className="hero-badge">
               <span>✨</span>
               Streamline Your Business Education
-            </div>
+            </div> */}
             
-            <h1 className="hero-title">
-              Manage Classes, Students & 
-              <span className="gradient-text"> Payments</span> 
-              in One Platform
+                          <span>✨</span>
+<h1 className="hero-title">
+            Streamline
+              <span className="gradient-text"> Your </span> 
+              Business!
             </h1>
             
             <p className="hero-description">
               SibaWay helps super admins and business owners efficiently manage classes, 
-              process registrations, track payments, and grow their education business.
+              process registrations, track payments and grow their education business.
             </p>
 
             <div className="hero-buttons">

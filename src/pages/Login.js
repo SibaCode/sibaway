@@ -43,20 +43,20 @@ function Login() {
     }
   }, [userData, navigate]);
 
-  const fillDemoCredentials = (role) => {
-    switch (role) {
-      case 'superadmin':
-        setEmail('superadmin@sibaway.com');
-        setPassword('superadmin@sibaway.com');
-        break;
-      case 'orgadmin':
-        setEmail('mvubusiba@gmail.com');
-        setPassword('mvubusiba@gmail.com');
-        break;
-      default:
-        break;
-    }
-  };
+//   const fillDemoCredentials = (role) => {
+//     switch (role) {
+//       case 'superadmin':
+//         setEmail('superadmin@sibaway.com');
+//         setPassword('superadmin@sibaway.com');
+//         break;
+//       case 'orgadmin':
+//         setEmail('mvubusiba@gmail.com');
+//         setPassword('mvubusiba@gmail.com');
+//         break;
+//       default:
+//         break;
+//     }
+//   };
 
   return (
     <div className="login-container">
@@ -149,7 +149,7 @@ function Login() {
           </div>
 
           {/* Quick Access Section */}
-          <div className="quick-access-section">
+          {/* <div className="quick-access-section">
             <div className="section-divider">
               <span>Quick Access</span>
             </div>
@@ -181,12 +181,12 @@ function Login() {
                 <div className="demo-btn-arrow">→</div>
               </button>
             </div>
-          </div>
+          </div> */}
 
           {/* Footer */}
-          <div className="login-footer">
+          {/* <div className="login-footer">
             <p>Secure admin portal • Powered by SibaWay</p>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>
