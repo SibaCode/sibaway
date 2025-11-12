@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 // Pages
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import OrgAdminDashboard from './pages/OrgAdminDashboard';
-import StudentDashboard from './pages/StudentDashboard';
+// import StudentDashboard from './pages/StudentDashboard';
 import ClassRegistration from './pages/ClassRegistration';
 import Login from './pages/Login';
 
@@ -19,13 +19,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/super-admin" element={<SuperAdminDashboard />} />
-            <Route path="/org-admin" element={<OrgAdminDashboard />} />
-            <Route path="/student" element={<StudentDashboard />} />
-            
-            {/* NEW: Structured URL route */}
+            <Route path="/org-admin" element={<OrgAdminDashboard />} />            
             <Route path="/:businessSlug/:courseSlug/:venue/:date" element={<ClassRegistration />} />
-            
-            {/* OLD: Keep for backward compatibility */}
             <Route path="/join/:classSlug" element={<ClassRegistration />} />
             <Route path="/register/:classId" element={<ClassRegistration />} />
           </Routes>
