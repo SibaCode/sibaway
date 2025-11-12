@@ -9,7 +9,6 @@ function ClassRegistration() {
   const [classData, setClassData] = useState(null);
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
   
@@ -17,15 +16,12 @@ function ClassRegistration() {
     name: '',
     email: '',
     phone: '',
-    paymentDate: '',
-    amountPaid: '',
-    transactionId: ''
+    paymentDate: ''
   });
   const [popImage, setPopImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [formErrors, setFormErrors] = useState({});
 
-  // Fix: Use useCallback to prevent infinite re-renders
   const fetchClassData = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -33,9 +29,6 @@ function ClassRegistration() {
       
       let classDoc;
       
-      console.log('Fetching class data with:', { businessSlug, courseSlug, venue, date });
-      
-      // Find class by URL parameters
       if (businessSlug && courseSlug && venue && date) {
         const q = query(
           collection(db, 'classes'),
@@ -46,8 +39,6 @@ function ClassRegistration() {
         );
         const querySnapshot = await getDocs(q);
         
-        console.log('Query results:', querySnapshot.docs.length);
-        
         if (!querySnapshot.empty) {
           classDoc = querySnapshot.docs[0];
         }
@@ -55,20 +46,14 @@ function ClassRegistration() {
 
       if (classDoc) {
         const classData = { id: classDoc.id, ...classDoc.data() };
-        console.log('Class data found:', classData);
         setClassData(classData);
         
-        // Fetch business data
         if (classData.organizationId) {
           try {
-            console.log('Fetching organization:', classData.organizationId);
             const businessDoc = await getDoc(doc(db, 'organizations', classData.organizationId));
             if (businessDoc.exists()) {
-              const businessData = businessDoc.data();
-              console.log('Business data found:', businessData);
-              setBusinessData(businessData);
+              setBusinessData(businessDoc.data());
             } else {
-              console.log('Organization not found, using fallback');
               setBusinessData({
                 name: classData.organizationName || 'SkillShare',
                 adminName: 'Sibahle Mvubu',
@@ -76,7 +61,6 @@ function ClassRegistration() {
               });
             }
           } catch (orgError) {
-            console.error('Error fetching organization:', orgError);
             setBusinessData({
               name: classData.organizationName || 'SkillShare',
               adminName: 'Sibahle Mvubu',
@@ -84,7 +68,6 @@ function ClassRegistration() {
             });
           }
         } else {
-          console.log('No organizationId, using fallback');
           setBusinessData({
             name: classData.organizationName || 'SkillShare',
             adminName: 'Sibahle Mvubu',
@@ -92,22 +75,18 @@ function ClassRegistration() {
           });
         }
       } else {
-        console.log('No class document found');
-        setError('Class not found. The class may have been removed or the link is incorrect.');
+        setError('Class not found. Please check your registration link.');
       }
     } catch (error) {
-      console.error('Error fetching class:', error);
       setError('Unable to load class information. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
-  }, [businessSlug, courseSlug, venue, date]); // Add dependencies
+  }, [businessSlug, courseSlug, venue, date]);
 
-  // Fix: Proper useEffect with dependencies
   useEffect(() => {
-    console.log('useEffect triggered');
     fetchClassData();
-  }, [fetchClassData]); // Only depend on fetchClassData
+  }, [fetchClassData]);
 
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -121,18 +100,15 @@ function ClassRegistration() {
   const validateForm = () => {
     const errors = {};
     
-    if (!formData.name.trim()) errors.name = 'Full name is required';
+    if (!formData.name.trim()) errors.name = 'Please enter your full name';
     if (!formData.email.trim()) {
-      errors.email = 'Email is required';
+      errors.email = 'Please enter your email';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       errors.email = 'Please enter a valid email address';
     }
-    if (!formData.phone.trim()) errors.phone = 'Phone number is required';
-    if (!formData.paymentDate) errors.paymentDate = 'Payment date is required';
-    if (!formData.amountPaid || parseFloat(formData.amountPaid) <= 0) {
-      errors.amountPaid = 'Please enter a valid amount';
-    }
-    if (!popImage) errors.popImage = 'Proof of payment is required';
+    if (!formData.phone.trim()) errors.phone = 'Please enter your phone number';
+    if (!formData.paymentDate) errors.paymentDate = 'Please select payment date';
+    if (!popImage) errors.popImage = 'Please upload proof of payment';
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -142,12 +118,12 @@ function ClassRegistration() {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setFormErrors({ popImage: 'File size too large. Please select an image under 5MB.' });
+        setFormErrors({ popImage: 'File is too large. Please select a smaller image.' });
         return;
       }
 
       if (!file.type.startsWith('image/')) {
-        setFormErrors({ popImage: 'Please select an image file (JPG, PNG, etc.)' });
+        setFormErrors({ popImage: 'Please select an image file (JPG, PNG)' });
         return;
       }
 
@@ -158,7 +134,7 @@ function ClassRegistration() {
         const base64 = await convertToBase64(file);
         setImagePreview(base64);
       } catch (error) {
-        setFormErrors({ popImage: 'Error processing image. Please try another file.' });
+        setFormErrors({ popImage: 'Error uploading image. Please try again.' });
       }
     }
   };
@@ -181,8 +157,7 @@ function ClassRegistration() {
         studentEmail: formData.email.trim(),
         studentPhone: formData.phone.trim(),
         paymentDate: formData.paymentDate,
-        amountPaid: parseFloat(formData.amountPaid),
-        transactionId: formData.transactionId.trim(),
+        amountPaid: parseFloat(classData.price),
         popBase64,
         popFileName: popImage.name,
         popFileType: popImage.type,
@@ -195,12 +170,10 @@ function ClassRegistration() {
         classPrice: classData.price
       };
 
-      console.log('Submitting registration:', registrationData);
       await addDoc(collection(db, 'registrations'), registrationData);
       setSubmitted(true);
 
     } catch (error) {
-      console.error('Error submitting registration:', error);
       setError('Failed to submit registration. Please check your connection and try again.');
     }
   };
@@ -220,12 +193,6 @@ function ClassRegistration() {
     }
   };
 
-  const formatTime = (timeString) => {
-    if (!timeString) return 'To be announced';
-    return timeString;
-  };
-
-  // Add a simple retry function
   const handleRetry = () => {
     setLoading(true);
     setError(null);
@@ -272,45 +239,33 @@ function ClassRegistration() {
       <div className="class-registration">
         <div className="registration-container">
           <div className="success-page">
-            <div className="success-icon">✓</div>
-            <h1>Registration Submitted Successfully</h1>
+            <div className="success-icon">✅</div>
+            <h1>Registration Complete!</h1>
+            <p className="success-subtitle">Thank you for registering for {classData.name}</p>
             
-            <div className="success-details">
-              <div className="detail-card">
-                <h3>Registration Details</h3>
-                <p><strong>Student:</strong> {formData.name}</p>
-                <p><strong>Class:</strong> {classData.name}</p>
-                <p><strong>Email:</strong> {formData.email}</p>
-                <p><strong>Reference ID:</strong> {uuidv4().slice(0, 8).toUpperCase()}</p>
+            <div className="success-summary">
+              <div className="summary-item">
+                <strong>Student:</strong> {formData.name}
               </div>
-              
-              <div className="next-steps">
-                <h3>What Happens Next?</h3>
-                <ul>
-                  <li>Your registration is now under review</li>
-                  <li>{businessData?.name} will verify your payment</li>
-                  <li>You'll receive a confirmation email within 24 hours</li>
-                  <li>Keep your payment receipt for reference</li>
-                </ul>
+              <div className="summary-item">
+                <strong>Class:</strong> {classData.name}
+              </div>
+              <div className="summary-item">
+                <strong>Amount Paid:</strong> R{classData.price}
               </div>
             </div>
 
-            <div className="contact-reminder">
-              <p>
-                <strong>Questions?</strong> Contact {businessData?.adminName} at {' '}
-                <a href={`mailto:${businessData?.email || 'mvubusiba@gmail.com'}`}>
-                  {businessData?.email || 'mvubusiba@gmail.com'}
-                </a>
-              </p>
+            <div className="next-steps">
+              <h3>What happens next?</h3>
+              <ul>
+                <li>We'll review your payment within 24 hours</li>
+                <li>You'll receive a confirmation email</li>
+                <li>Keep your payment receipt safe</li>
+              </ul>
             </div>
 
-            <div className="success-actions">
-              <button 
-                onClick={() => window.location.reload()}
-                className="btn btn-primary"
-              >
-                Register Another Student
-              </button>
+            <div className="contact-info">
+              <p><strong>Questions?</strong> Email {businessData?.adminName} at {businessData?.email}</p>
             </div>
           </div>
         </div>
@@ -318,63 +273,59 @@ function ClassRegistration() {
     );
   }
 
-  // Simplified return for the main form - remove complex styling that might cause issues
   return (
     <div className="class-registration">
       <div className="registration-container">
+        
         {/* Simple Header */}
-        <header className="registration-header">
-          <h1>{businessData?.name || 'SkillShare'}</h1>
-          <p>Class Registration</p>
-        </header>
+        <div className="registration-header">
+          <div className="header-content">
+            <h6 className="business-name">{businessData?.name}</h6>
 
-        {/* Class Information */}
-        <section className="class-information">
-          <h2>{classData.name}</h2>
-          <div className="price">${classData.price}</div>
-          <p>{classData.description}</p>
+            <p>Complete your registration in 2 minutes</p>
+          </div>
+        </div>
 
+        {/* Class Info */}
+        <div className="class-card">
+          <div className="class-header">
+            <h2>{classData.name}</h2>
+            <div className="class-price">R{classData.price}</div>
+          </div>
+          <p className="class-description">{classData.description}</p>
+          
           <div className="class-details">
-            <h3>Class Details</h3>
-            {classData.startDate && (
-              <p><strong>Start Date:</strong> {formatDate(classData.startDate)}</p>
-            )}
-            {classData.endDate && (
-              <p><strong>End Date:</strong> {formatDate(classData.endDate)}</p>
-            )}
-            {classData.classTime && (
-              <p><strong>Time:</strong> {formatTime(classData.classTime)}</p>
-            )}
-            {classData.venue && (
-              <p><strong>Location:</strong> {classData.venue}</p>
-            )}
+            <div className="detail">
+              <span className="icon">📅</span>
+              <div>
+                <div className="label">Date</div>
+                <div className="value">{classData.startDate ? formatDate(classData.startDate) : 'To be announced'}</div>
+              </div>
+            </div>
+            <div className="detail">
+              <span className="icon">📍</span>
+              <div>
+                <div className="label">Location</div>
+                <div className="value">{classData.venue || 'To be announced'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Simple Registration Form */}
+        <div className="form-card">
+          <div className="form-header">
+            <h3>Your Information</h3>
+            <p>Fill in your details to complete registration</p>
           </div>
 
-          <div className="payment-info">
-            <h3>Payment Instructions</h3>
-            <p>{classData.paymentInstructions || 'Please complete your payment before registration.'}</p>
-          </div>
-        </section>
-
-        {/* Registration CTA or Form */}
-        {!showRegistrationForm ? (
-          <section className="registration-cta">
-            <button 
-              onClick={() => setShowRegistrationForm(true)}
-              className="btn btn-primary"
-            >
-              Register Now
-            </button>
-            <p>Simple registration process - no account needed</p>
-          </section>
-        ) : (
           <form onSubmit={handleSubmit} className="registration-form">
-            <h3>Student Registration</h3>
-
+            
             <div className="form-group">
-              <label>Full Name *</label>
+              <label>Full Name</label>
               <input
                 type="text"
+                placeholder="Enter your full name"
                 value={formData.name}
                 onChange={(e) => {
                   setFormData({...formData, name: e.target.value});
@@ -382,13 +333,14 @@ function ClassRegistration() {
                 }}
                 className={formErrors.name ? 'error' : ''}
               />
-              {formErrors.name && <span className="error-message">{formErrors.name}</span>}
+              {formErrors.name && <div className="error-message">{formErrors.name}</div>}
             </div>
 
             <div className="form-group">
-              <label>Email *</label>
+              <label>Email Address</label>
               <input
                 type="email"
+                placeholder="your.email@example.com"
                 value={formData.email}
                 onChange={(e) => {
                   setFormData({...formData, email: e.target.value});
@@ -396,13 +348,14 @@ function ClassRegistration() {
                 }}
                 className={formErrors.email ? 'error' : ''}
               />
-              {formErrors.email && <span className="error-message">{formErrors.email}</span>}
+              {formErrors.email && <div className="error-message">{formErrors.email}</div>}
             </div>
 
             <div className="form-group">
-              <label>Phone *</label>
+              <label>Phone Number</label>
               <input
                 type="tel"
+                placeholder="072 123 4567"
                 value={formData.phone}
                 onChange={(e) => {
                   setFormData({...formData, phone: e.target.value});
@@ -410,11 +363,11 @@ function ClassRegistration() {
                 }}
                 className={formErrors.phone ? 'error' : ''}
               />
-              {formErrors.phone && <span className="error-message">{formErrors.phone}</span>}
+              {formErrors.phone && <div className="error-message">{formErrors.phone}</div>}
             </div>
 
             <div className="form-group">
-              <label>Payment Date *</label>
+              <label>Payment Date</label>
               <input
                 type="date"
                 value={formData.paymentDate}
@@ -424,53 +377,60 @@ function ClassRegistration() {
                 }}
                 className={formErrors.paymentDate ? 'error' : ''}
               />
-              {formErrors.paymentDate && <span className="error-message">{formErrors.paymentDate}</span>}
+              {formErrors.paymentDate && <div className="error-message">{formErrors.paymentDate}</div>}
             </div>
 
             <div className="form-group">
-              <label>Amount Paid *</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.amountPaid}
-                onChange={(e) => {
-                  setFormData({...formData, amountPaid: e.target.value});
-                  setFormErrors(prev => ({...prev, amountPaid: ''}));
-                }}
-                className={formErrors.amountPaid ? 'error' : ''}
-              />
-              {formErrors.amountPaid && <span className="error-message">{formErrors.amountPaid}</span>}
-            </div>
-
-            <div className="form-group">
-              <label>Proof of Payment *</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-              />
-              {formErrors.popImage && <span className="error-message">{formErrors.popImage}</span>}
-              {imagePreview && (
-                <div className="file-preview">
-                  <img src={imagePreview} alt="Preview" style={{maxWidth: '200px'}} />
+              <label>Proof of Payment</label>
+              <div className="file-upload-section">
+                <div className={`file-upload ${formErrors.popImage ? 'error' : ''}`}>
+                  <div className="upload-icon">📎</div>
+                  <div className="upload-text">
+                    <div className="upload-title">Upload payment proof</div>
+                    <div className="upload-subtitle">Click to select an image file</div>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="file-input"
+                  />
                 </div>
-              )}
+                {formErrors.popImage && <div className="error-message">{formErrors.popImage}</div>}
+                
+                {imagePreview && (
+                  <div className="image-preview">
+                    <img src={imagePreview} alt="Payment proof" />
+                    <button 
+                      type="button" 
+                      className="remove-image"
+                      onClick={() => {
+                        setPopImage(null);
+                        setImagePreview(null);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="form-actions">
-              <button type="submit" className="btn btn-primary">
-                Submit Registration
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary"
-                onClick={() => setShowRegistrationForm(false)}
-              >
-                Cancel
-              </button>
+            <div className="payment-info">
+              <div className="payment-header">
+                <span className="icon">💳</span>
+                <span>Payment Amount: R{classData.price}</span>
+              </div>
+              <p className="payment-instructions">
+                {classData.paymentInstructions || 'Please make payment and upload proof above.'}
+              </p>
             </div>
+
+            <button type="submit" className="submit-button">
+              Complete Registration
+            </button>
           </form>
-        )}
+        </div>
       </div>
     </div>
   );

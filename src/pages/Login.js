@@ -50,8 +50,8 @@ function Login() {
         setPassword('superadmin@sibaway.com');
         break;
       case 'orgadmin':
-        setEmail('orgadmin@sibaway.com');
-        setPassword('admin123');
+        setEmail('mvubusiba@gmail.com');
+        setPassword('mvubusiba@gmail.com');
         break;
       default:
         break;
@@ -76,7 +76,7 @@ function Login() {
               <div className="logo-icon">🚀</div>
               <div className="logo-text">
                 <h1>SibaWay</h1>
-                <p>Education Platform</p>
+                <p>Streamline your business</p>
               </div>
             </div>
             <div className="welcome-section">

@@ -95,30 +95,45 @@ function OrgAdminDashboard() {
       getDocs(approvedQ)
     ]);
 
-    const pendingData = await Promise.all(
-      pendingSnapshot.docs.map(async (regDoc) => {
-        const regData = regDoc.data();
-        const classDoc = await getDoc(doc(db, 'classes', regData.classId));
-        return {
-          id: regDoc.id,
-          ...regData,
-          class: classDoc.exists() ? classDoc.data() : { name: 'Class Not Found' }
-        };
-      })
-    );
+   const pendingData = await Promise.all(
+  pendingSnapshot.docs.map(async (regDoc) => {
+    const regData = regDoc.data();
+    const classDoc = await getDoc(doc(db, 'classes', regData.classId));
+    
+    let className = 'Class Not Found';
+    if (classDoc.exists()) {
+      const classData = classDoc.data();
+      // Use the URL format: /{courseSlug}/{venueSlug}/{dateSlug}
+      className = `/${classData.courseSlug}/${classData.venueSlug}/${classData.dateSlug}`;
+    }
+    
+    return {
+      id: regDoc.id,
+      ...regData,
+      class: { name: className }
+    };
+  })
+);
 
-    const approvedData = await Promise.all(
-      approvedSnapshot.docs.map(async (regDoc) => {
-        const regData = regDoc.data();
-        const classDoc = await getDoc(doc(db, 'classes', regData.classId));
-        return {
-          id: regDoc.id,
-          ...regData,
-          class: classDoc.exists() ? classDoc.data() : { name: 'Class Not Found' }
-        };
-      })
-    );
-
+const approvedData = await Promise.all(
+  approvedSnapshot.docs.map(async (regDoc) => {
+    const regData = regDoc.data();
+    const classDoc = await getDoc(doc(db, 'classes', regData.classId));
+    
+    let className = 'Class Not Found';
+    if (classDoc.exists()) {
+      const classData = classDoc.data();
+      // Use the URL format: /{courseSlug}/{venueSlug}/{dateSlug}
+      className = `/${classData.courseSlug}/${classData.venueSlug}/${classData.dateSlug}`;
+    }
+    
+    return {
+      id: regDoc.id,
+      ...regData,
+      class: { name: className }
+    };
+  })
+);
     setPendingRegistrations(pendingData);
     setApprovedRegistrations(approvedData);
   };
