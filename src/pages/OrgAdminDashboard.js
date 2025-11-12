@@ -495,7 +495,7 @@ const createClass = async (e) => {
                       <div className="info-grid">
                         <div className="info-item">
                           <span className="label">Price:</span>
-                          <span className="value">${classItem.price}</span>
+                          <span className="value">R{classItem.price}</span>
                         </div>
                         {classItem.capacity && (
                           <div className="info-item">
@@ -601,7 +601,7 @@ const createClass = async (e) => {
                         </div>
                         <div className="info-item">
                           <span className="label">Class:</span>
-                          <span className="value">{reg.courseSlug}</span>
+                          <span className="value">{reg.name}</span>
                         </div>
                         <div className="info-item">
                           <span className="label">Amount Paid:</span>
@@ -800,7 +800,7 @@ const createClass = async (e) => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Price ($) *</label>
+                    <label className="form-label">Price *</label>
                     <input
                       type="number"
                       step="0.01"
