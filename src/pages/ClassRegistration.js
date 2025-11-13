@@ -125,9 +125,9 @@ function ClassRegistration() {
     const file = e.target.files[0];
     if (file) {
       // Simple file size check
-      const maxSize = 2 * 1024 * 1024; // 2MB for all devices
+      const maxSize = 4 * 1024 * 1024; // 2MB for all devices
       if (file.size > maxSize) {
-        setFormErrors({ popImage: 'File is too large. Please select an image under 2MB.' });
+        setFormErrors({ popImage: 'File is too large. Please select an image under 4MB.' });
         return;
       }
 
@@ -468,7 +468,7 @@ function ClassRegistration() {
                   <div className="upload-text">
                     <div className="upload-title">Upload payment proof</div>
                     <div className="upload-subtitle">
-                      Click to select an image file (Max 2MB)
+                      Click to select an image file (Max 4MB)
                     </div>
                   </div>
                   <input
