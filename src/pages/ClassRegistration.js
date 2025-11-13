@@ -12,7 +12,6 @@ function ClassRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
-  const [isMobile, setIsMobile] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -23,17 +22,6 @@ function ClassRegistration() {
   const [popImage, setPopImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [formErrors, setFormErrors] = useState({});
-
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const fetchClassData = React.useCallback(async () => {
     try {
@@ -106,6 +94,7 @@ function ClassRegistration() {
     fetchClassData();
   }, [fetchClassData]);
 
+  // Simple file to base64 conversion without compression
   const convertToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -135,10 +124,10 @@ function ClassRegistration() {
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Mobile-friendly file size check (smaller limit for mobile)
-      const maxSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+      // Simple file size check
+      const maxSize = 2 * 1024 * 1024; // 2MB for all devices
       if (file.size > maxSize) {
-        setFormErrors({ popImage: `File is too large. Please select an image under ${isMobile ? '3MB' : '5MB'}.` });
+        setFormErrors({ popImage: 'File is too large. Please select an image under 2MB.' });
         return;
       }
 
@@ -155,7 +144,7 @@ function ClassRegistration() {
         setImagePreview(base64);
       } catch (error) {
         console.error('Error converting image:', error);
-        setFormErrors({ popImage: 'Error uploading image. Please try again.' });
+        setFormErrors({ popImage: 'Error uploading image. Please try a different image.' });
       }
     }
   };
@@ -171,9 +160,21 @@ function ClassRegistration() {
     setError(null);
 
     try {
-      const popBase64 = await convertToBase64(popImage);
+      console.log('Starting registration submission...');
+      
+      // Convert image to base64
+      let popBase64;
+      try {
+        popBase64 = await convertToBase64(popImage);
+        console.log('Image converted successfully, size:', popBase64.length);
+      } catch (convertError) {
+        console.error('Image conversion failed:', convertError);
+        throw new Error('IMAGE_CONVERSION_FAILED');
+      }
+
       const studentId = uuidv4();
 
+      // Create minimal registration data to reduce payload size
       const registrationData = {
         classId: classData.id,
         studentId: studentId,
@@ -182,47 +183,40 @@ function ClassRegistration() {
         studentPhone: formData.phone.trim(),
         paymentDate: formData.paymentDate,
         amountPaid: classData.price,
-        popBase64,
+        popBase64: popBase64, // Store the base64 string
         popFileName: popImage.name,
-        popFileType: popImage.type,
-        popFileSize: popImage.size,
         status: 'pending',
         registeredAt: new Date(),
         organizationId: classData.organizationId || '',
         businessName: businessData?.name || 'SkillShare',
-        adminEmail: businessData?.email || 'mvubusiba@gmail.com',
         className: classData.name,
-        classPrice: classData.price,
-        businessSlug,
-        courseSlug,
-        venueSlug: venue,
-        dateSlug: date,
-        // Add device info for debugging
-        userAgent: navigator.userAgent,
-        isMobile: isMobile,
-        timestamp: new Date().toISOString()
+        classPrice: classData.price
       };
 
-      console.log('Submitting registration from:', isMobile ? 'Mobile' : 'Desktop');
+      console.log('Submitting to Firestore...');
       
+      // Simple submission without timeout
       const docRef = await addDoc(collection(db, 'registrations'), registrationData);
-      console.log('Registration successful, ID:', docRef.id);
+      console.log('Registration successful! Document ID:', docRef.id);
 
       setSubmitted(true);
 
     } catch (error) {
-      console.error('Submission error on mobile:', error);
+      console.error('Submission error:', error);
+      console.error('Error details:', error.code, error.message);
       
       let errorMessage = 'Failed to submit registration. ';
       
-      if (error.code === 'permission-denied') {
-        errorMessage += 'Database permissions issue.';
+      if (error.message === 'IMAGE_CONVERSION_FAILED') {
+        errorMessage = 'Failed to process the image. Please try a different image file.';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Database permission denied. Please contact support.';
       } else if (error.code === 'unavailable') {
-        errorMessage += 'Network error. Please check your connection.';
-      } else if (error.message.includes('Quota')) {
-        errorMessage += 'File too large for mobile upload. Please try a smaller image.';
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message.includes('quota') || error.message.includes('Quota')) {
+        errorMessage = 'File is too large. Please try a smaller image (under 1MB).';
       } else {
-        errorMessage += 'Please try again or contact support.';
+        errorMessage += 'Please try again. If the problem continues, contact support.';
       }
       
       setError(errorMessage);
@@ -252,7 +246,6 @@ function ClassRegistration() {
     fetchClassData();
   };
 
-  // Get today's date for max date restriction
   const getTodayDate = () => {
     return new Date().toISOString().split('T')[0];
   };
@@ -283,11 +276,6 @@ function ClassRegistration() {
             Refresh Page
           </button>
         </div>
-        {isMobile && (
-          <div className="mobile-tip">
-            <p>💡 <strong>Mobile Tip:</strong> Ensure you have a stable internet connection.</p>
-          </div>
-        )}
       </div>
     );
   }
@@ -348,20 +336,13 @@ function ClassRegistration() {
     <div className="class-registration">
       <div className="registration-container">
         
-        {/* Simple Header */}
         <div className="registration-header">
           <div className="header-content">
             <h6 className="business-name-test">{businessData?.name}</h6>
             <p>Complete your registration in 2 minutes</p>
-            {/* {isMobile && (
-              <div className="mobile-notice">
-                📱 Mobile-friendly form
-              </div>
-            )} */}
           </div>
         </div>
 
-        {/* Class Info */}
         <div className="class-card">
           <div className="class-header">
             <h2>{classData.name}</h2>
@@ -387,7 +368,6 @@ function ClassRegistration() {
           </div>
         </div>
 
-        {/* Simple Registration Form */}
         <div className="form-card">
           <div className="form-header">
             <h3>Your Information</h3>
@@ -398,11 +378,9 @@ function ClassRegistration() {
             <div className="submission-error">
               <div className="error-icon">❌</div>
               <p>{error}</p>
-              {isMobile && (
-                <div className="mobile-help">
-                  <p><strong>Mobile Help:</strong> Try using a smaller image or better network connection.</p>
-                </div>
-              )}
+              <div className="error-help">
+                <p><strong>Tip:</strong> Try using a smaller image file (under 1MB) and ensure good internet connection.</p>
+              </div>
             </div>
           )}
 
@@ -420,9 +398,6 @@ function ClassRegistration() {
                 }}
                 className={formErrors.name ? 'error' : ''}
                 disabled={submitting}
-                // Mobile-specific attributes
-                inputMode="text"
-                autoComplete="name"
               />
               {formErrors.name && <div className="error-message">{formErrors.name}</div>}
             </div>
@@ -439,9 +414,6 @@ function ClassRegistration() {
                 }}
                 className={formErrors.email ? 'error' : ''}
                 disabled={submitting}
-                // Mobile-specific attributes
-                inputMode="email"
-                autoComplete="email"
               />
               {formErrors.email && <div className="error-message">{formErrors.email}</div>}
             </div>
@@ -458,9 +430,6 @@ function ClassRegistration() {
                 }}
                 className={formErrors.phone ? 'error' : ''}
                 disabled={submitting}
-                // Mobile-specific attributes
-                inputMode="tel"
-                autoComplete="tel"
               />
               {formErrors.phone && <div className="error-message">{formErrors.phone}</div>}
             </div>
@@ -480,7 +449,8 @@ function ClassRegistration() {
               />
               {formErrors.paymentDate && <div className="error-message">{formErrors.paymentDate}</div>}
             </div>
-          <div className="payment-info">
+
+            <div className="payment-info">
               <div className="payment-header">
                 <span className="icon">💳</span>
                 <span>Payment Amount: R{classData.price}</span>
@@ -489,16 +459,7 @@ function ClassRegistration() {
                 {classData.paymentInstructions || 'Please make payment and upload proof above.'}
               </p>
             </div>
-  {isMobile && (
-              <div className="mobile-tips">
-                <h4>📱 Mobile Tips:</h4>
-                <ul>
-                  <li>Use a stable Wi-Fi connection for faster uploads</li>
-                  <li>Keep image files under 3MB</li>
-                  <li>Take a clear photo of your payment receipt</li>
-                </ul>
-              </div>
-            )}
+
             <div className="form-group">
               <label>Proof of Payment</label>
               <div className="file-upload-section">
@@ -507,8 +468,7 @@ function ClassRegistration() {
                   <div className="upload-text">
                     <div className="upload-title">Upload payment proof</div>
                     <div className="upload-subtitle">
-                      {isMobile ? 'Tap to take photo or select image' : 'Click to select an image file'}
-                      {isMobile && <br />}(Max 3MB)
+                      Click to select an image file (Max 2MB)
                     </div>
                   </div>
                   <input
@@ -517,8 +477,6 @@ function ClassRegistration() {
                     onChange={handleFileChange}
                     className="file-input"
                     disabled={submitting}
-                    // Mobile-specific attributes
-                    capture="environment" // Opens camera on mobile
                   />
                 </div>
                 {formErrors.popImage && <div className="error-message">{formErrors.popImage}</div>}
@@ -542,7 +500,6 @@ function ClassRegistration() {
               </div>
             </div>
 
-           
             <button 
               type="submit" 
               className={`submit-button ${submitting ? 'submitting' : ''}`}
@@ -558,7 +515,9 @@ function ClassRegistration() {
               )}
             </button>
 
-          
+            <div className="form-tips">
+              <p><strong>Note:</strong> For best results, use images under 1MB in size.</p>
+            </div>
           </form>
         </div>
       </div>
