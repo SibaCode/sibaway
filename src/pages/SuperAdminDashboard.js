@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, getDocs, addDoc, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 function SuperAdminDashboard() {
   const { userData, logout } = useAuth();
   const [businesses, setBusinesses] = useState([]);
-  const [users, setUsers] = useState([]);
   const [allClasses, setAllClasses] = useState([]);
   const [allRegistrations, setAllRegistrations] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
@@ -26,24 +25,52 @@ function SuperAdminDashboard() {
   });
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
+    // Define all fetch functions inside useEffect to avoid dependency warnings
+    const fetchBusinesses = async () => {
+      const querySnapshot = await getDocs(collection(db, 'organizations'));
+      const businessesData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBusinesses(businessesData);
+    };
 
-  const fetchAllData = async () => {
-    await Promise.all([
-      fetchBusinesses(),
-      fetchUsers(),
-      fetchAllClasses(),
-      fetchAllRegistrations()
-    ]);
-  };
+    const fetchAllClasses = async () => {
+      const querySnapshot = await getDocs(collection(db, 'classes'));
+      const classesData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllClasses(classesData);
+    };
+
+    const fetchAllRegistrations = async () => {
+      const querySnapshot = await getDocs(collection(db, 'registrations'));
+      const registrationsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllRegistrations(registrationsData);
+    };
+
+    const fetchAllData = async () => {
+      await Promise.all([
+        fetchBusinesses(),
+        fetchAllClasses(),
+        fetchAllRegistrations()
+      ]);
+    };
+
+    fetchAllData();
+  }, []); // Empty dependency array - all functions are defined inside
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   };
 
-  const fetchBusinesses = async () => {
+  // Individual refresh functions for external use (like refresh buttons)
+  const refreshBusinesses = async () => {
     const querySnapshot = await getDocs(collection(db, 'organizations'));
     const businessesData = querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -52,16 +79,7 @@ function SuperAdminDashboard() {
     setBusinesses(businessesData);
   };
 
-  const fetchUsers = async () => {
-    const querySnapshot = await getDocs(collection(db, 'users'));
-    const usersData = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    setUsers(usersData);
-  };
-
-  const fetchAllClasses = async () => {
+  const refreshAllClasses = async () => {
     const querySnapshot = await getDocs(collection(db, 'classes'));
     const classesData = querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -70,7 +88,7 @@ function SuperAdminDashboard() {
     setAllClasses(classesData);
   };
 
-  const fetchAllRegistrations = async () => {
+  const refreshAllRegistrations = async () => {
     const querySnapshot = await getDocs(collection(db, 'registrations'));
     const registrationsData = querySnapshot.docs.map(doc => ({
       id: doc.id,
@@ -92,15 +110,9 @@ function SuperAdminDashboard() {
 
   // View business dashboard (read-only access)
   const viewBusinessDashboard = (businessId) => {
-    // This would open the business's dashboard in a new tab or modal
-    // For now, we'll just show a notification
     const business = businesses.find(b => b.id === businessId);
     showNotification(`Viewing ${business?.name} dashboard`, 'info');
-    // In future: window.open(`/business/${businessId}`, '_blank');
   };
-
-  // Rest of your existing functions (handleLogoUpload, convertToBase64, createBusinessAndOwner, deleteBusiness, copyToClipboard) remain the same...
-
 
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
@@ -197,8 +209,8 @@ function SuperAdminDashboard() {
         logoPreview: null
       });
       
-      fetchBusinesses();
-      fetchUsers();
+      // Refresh data using the refresh functions
+      refreshBusinesses();
       
       showNotification(
         `Business created successfully!\n\nOwner credentials:\nEmail: ${businessForm.ownerEmail}\nPassword: ${businessForm.ownerPassword}`,
@@ -217,7 +229,7 @@ function SuperAdminDashboard() {
     if (window.confirm(`Are you sure you want to delete "${businessName}"? This action cannot be undone.`)) {
       try {
         await deleteDoc(doc(db, 'organizations', businessId));
-        fetchBusinesses();
+        refreshBusinesses();
         showNotification('Business deleted successfully', 'success');
       } catch (error) {
         console.error('Error deleting business:', error);
@@ -230,6 +242,7 @@ function SuperAdminDashboard() {
     navigator.clipboard.writeText(text);
     showNotification(message, 'success');
   };
+
   return (
     <div className="dashboard">
       {/* Notification System */}
@@ -387,7 +400,7 @@ function SuperAdminDashboard() {
               <div className="section-actions">
                 <button 
                   className="btn btn-outline btn-sm"
-                  onClick={fetchBusinesses}
+                  onClick={refreshBusinesses}
                 >
                   🔄 Refresh
                 </button>
@@ -400,7 +413,6 @@ function SuperAdminDashboard() {
               </div>
             </div>
             
-            {/* Your existing businesses grid/cards */}
             {businesses.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">🏢</div>
@@ -491,7 +503,7 @@ function SuperAdminDashboard() {
               <h2>All Classes ({allClasses.length})</h2>
               <button 
                 className="btn btn-outline btn-sm"
-                onClick={fetchAllClasses}
+                onClick={refreshAllClasses}
               >
                 🔄 Refresh
               </button>
@@ -551,7 +563,7 @@ function SuperAdminDashboard() {
               <h2>All Registrations ({allRegistrations.length})</h2>
               <button 
                 className="btn btn-outline btn-sm"
-                onClick={fetchAllRegistrations}
+                onClick={refreshAllRegistrations}
               >
                 🔄 Refresh
               </button>
@@ -605,8 +617,8 @@ function SuperAdminDashboard() {
           </section>
         )}
 
-        {/* Keep your existing Create Business Modal here */}
-          {showCreateBusiness && (
+        {/* Create Business Modal */}
+        {showCreateBusiness && (
           <div className="modal-overlay">
             <div className="modal-content">
               <div className="modal-header">
