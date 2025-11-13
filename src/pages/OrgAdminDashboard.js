@@ -827,43 +827,43 @@ const generateRevenueContent = () => {
 };
 
 // Bonus: Export All Reports as ZIP
-const exportAllReports = async () => {
-  try {
-    const JSZip = await import('jszip');
-    const zip = new JSZip();
+// const exportAllReports = async () => {
+//   try {
+//     const JSZip = await import('jszip');
+//     const zip = new JSZip();
     
-    // Add CSV files
-    zip.file("registrations.csv", convertRegistrationsToCSV());
-    zip.file("revenue-report.csv", convertRevenueToCSV());
-    zip.file("attendance-report.csv", convertAttendanceToCSV());
+//     // Add CSV files
+//     zip.file("registrations.csv", convertRegistrationsToCSV());
+//     zip.file("revenue-report.csv", convertRevenueToCSV());
+//     zip.file("attendance-report.csv", convertAttendanceToCSV());
     
-    // Generate and add PDF files (simplified versions)
-    const { jsPDF } = await import('jspdf');
+//     // Generate and add PDF files (simplified versions)
+//     const { jsPDF } = await import('jspdf');
     
-    // Create a simple summary PDF for the ZIP
-    const summaryPdf = new jsPDF();
-    summaryPdf.text(`Business Reports Export - ${new Date().toLocaleDateString()}`, 20, 30);
-    summaryPdf.text(`Total Classes: ${classes.length}`, 20, 50);
-    summaryPdf.text(`Total Students: ${totalStudents}`, 20, 60);
-    summaryPdf.text(`Total Revenue: R${totalRevenue.toFixed(2)}`, 20, 70);
-    zip.file("business-summary.pdf", summaryPdf.output('blob'));
+//     // Create a simple summary PDF for the ZIP
+//     const summaryPdf = new jsPDF();
+//     summaryPdf.text(`Business Reports Export - ${new Date().toLocaleDateString()}`, 20, 30);
+//     summaryPdf.text(`Total Classes: ${classes.length}`, 20, 50);
+//     summaryPdf.text(`Total Students: ${totalStudents}`, 20, 60);
+//     summaryPdf.text(`Total Revenue: R${totalRevenue.toFixed(2)}`, 20, 70);
+//     zip.file("business-summary.pdf", summaryPdf.output('blob'));
     
-    // Create ZIP file and download
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `business-reports-${new Date().toISOString().split('T')[0]}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+//     // Create ZIP file and download
+//     const content = await zip.generateAsync({ type: "blob" });
+//     const url = URL.createObjectURL(content);
+//     const link = document.createElement('a');
+//     link.href = url;
+//     link.download = `business-reports-${new Date().toISOString().split('T')[0]}.zip`;
+//     document.body.appendChild(link);
+//     link.click();
+//     document.body.removeChild(link);
     
-    showNotification('All reports exported successfully as ZIP file!');
-  } catch (error) {
-    console.error('Error generating ZIP:', error);
-    showNotification('Error exporting all reports', 'error');
-  }
-};
+//     showNotification('All reports exported successfully as ZIP file!');
+//   } catch (error) {
+//     console.error('Error generating ZIP:', error);
+//     showNotification('Error exporting all reports', 'error');
+//   }
+// };
   return (
     <div className="dashboard">
       {/* Notification System */}
