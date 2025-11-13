@@ -669,7 +669,9 @@ function OrgAdminDashboard() {
                 <p>All registrations have been processed.</p>
               </div>
             ) : (
-              <div className="registrations-list">
+              // <div className="registrations-list">
+                <div className="cards-grid">
+
                 {pendingRegistrations.map(reg => (
                   <div key={reg.id} className="card">
                     <div className="card-header">
@@ -757,7 +759,9 @@ function OrgAdminDashboard() {
                 <p>Students will appear here after you approve their registrations.</p>
               </div>
             ) : (
-              <div className="students-list">
+              // <div className="students-list">
+                <div className="cards-grid">
+
                 {approvedRegistrations.map(reg => (
                   <div key={reg.id} className="card">
                     <div className="card-header">

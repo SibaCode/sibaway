@@ -9,8 +9,10 @@ function ClassRegistration() {
   const [classData, setClassData] = useState(null);
   const [businessData, setBusinessData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -21,6 +23,17 @@ function ClassRegistration() {
   const [popImage, setPopImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchClassData = React.useCallback(async () => {
     try {
@@ -45,7 +58,11 @@ function ClassRegistration() {
       }
 
       if (classDoc) {
-        const classData = { id: classDoc.id, ...classDoc.data() };
+        const classData = { 
+          id: classDoc.id, 
+          ...classDoc.data(),
+          price: parseFloat(classDoc.data().price) || 0
+        };
         setClassData(classData);
         
         if (classData.organizationId) {
@@ -78,6 +95,7 @@ function ClassRegistration() {
         setError('Class not found. Please check your registration link.');
       }
     } catch (error) {
+      console.error('Error loading class:', error);
       setError('Unable to load class information. Please check your connection and try again.');
     } finally {
       setLoading(false);
@@ -117,8 +135,10 @@ function ClassRegistration() {
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setFormErrors({ popImage: 'File is too large. Please select a smaller image.' });
+      // Mobile-friendly file size check (smaller limit for mobile)
+      const maxSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setFormErrors({ popImage: `File is too large. Please select an image under ${isMobile ? '3MB' : '5MB'}.` });
         return;
       }
 
@@ -134,6 +154,7 @@ function ClassRegistration() {
         const base64 = await convertToBase64(file);
         setImagePreview(base64);
       } catch (error) {
+        console.error('Error converting image:', error);
         setFormErrors({ popImage: 'Error uploading image. Please try again.' });
       }
     }
@@ -146,6 +167,9 @@ function ClassRegistration() {
       return;
     }
 
+    setSubmitting(true);
+    setError(null);
+
     try {
       const popBase64 = await convertToBase64(popImage);
       const studentId = uuidv4();
@@ -157,31 +181,60 @@ function ClassRegistration() {
         studentEmail: formData.email.trim(),
         studentPhone: formData.phone.trim(),
         paymentDate: formData.paymentDate,
-        amountPaid: parseFloat(classData.price),
+        amountPaid: classData.price,
         popBase64,
         popFileName: popImage.name,
         popFileType: popImage.type,
+        popFileSize: popImage.size,
         status: 'pending',
         registeredAt: new Date(),
-        organizationId: classData.organizationId,
+        organizationId: classData.organizationId || '',
         businessName: businessData?.name || 'SkillShare',
         adminEmail: businessData?.email || 'mvubusiba@gmail.com',
         className: classData.name,
-        classPrice: classData.price
+        classPrice: classData.price,
+        businessSlug,
+        courseSlug,
+        venueSlug: venue,
+        dateSlug: date,
+        // Add device info for debugging
+        userAgent: navigator.userAgent,
+        isMobile: isMobile,
+        timestamp: new Date().toISOString()
       };
 
-      await addDoc(collection(db, 'registrations'), registrationData);
+      console.log('Submitting registration from:', isMobile ? 'Mobile' : 'Desktop');
+      
+      const docRef = await addDoc(collection(db, 'registrations'), registrationData);
+      console.log('Registration successful, ID:', docRef.id);
+
       setSubmitted(true);
 
     } catch (error) {
-      setError('Failed to submit registration. Please check your connection and try again.');
+      console.error('Submission error on mobile:', error);
+      
+      let errorMessage = 'Failed to submit registration. ';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage += 'Database permissions issue.';
+      } else if (error.code === 'unavailable') {
+        errorMessage += 'Network error. Please check your connection.';
+      } else if (error.message.includes('Quota')) {
+        errorMessage += 'File too large for mobile upload. Please try a smaller image.';
+      } else {
+        errorMessage += 'Please try again or contact support.';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'To be announced';
     try {
-      const date = new Date(dateString);
+      const date = dateString.toDate ? dateString.toDate() : new Date(dateString);
       return date.toLocaleDateString('en-US', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -199,6 +252,11 @@ function ClassRegistration() {
     fetchClassData();
   };
 
+  // Get today's date for max date restriction
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
   if (loading) {
     return (
       <div className="registration-loading">
@@ -208,15 +266,28 @@ function ClassRegistration() {
     );
   }
 
-  if (error) {
+  if (error && !submitting) {
     return (
       <div className="registration-error">
         <div className="error-icon">⚠️</div>
         <h2>Unable to Load Registration</h2>
         <p>{error}</p>
-        <button onClick={handleRetry} className="btn btn-primary">
-          Try Again
-        </button>
+        <div className="error-actions">
+          <button onClick={handleRetry} className="btn btn-primary">
+            Try Again
+          </button>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-secondary"
+          >
+            Refresh Page
+          </button>
+        </div>
+        {isMobile && (
+          <div className="mobile-tip">
+            <p>💡 <strong>Mobile Tip:</strong> Ensure you have a stable internet connection.</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -280,9 +351,13 @@ function ClassRegistration() {
         {/* Simple Header */}
         <div className="registration-header">
           <div className="header-content">
-            <h6 className="business-name">{businessData?.name}</h6>
-
+            <h6 className="business-name-test">{businessData?.name}</h6>
             <p>Complete your registration in 2 minutes</p>
+            {/* {isMobile && (
+              <div className="mobile-notice">
+                📱 Mobile-friendly form
+              </div>
+            )} */}
           </div>
         </div>
 
@@ -319,6 +394,18 @@ function ClassRegistration() {
             <p>Fill in your details to complete registration</p>
           </div>
 
+          {error && (
+            <div className="submission-error">
+              <div className="error-icon">❌</div>
+              <p>{error}</p>
+              {isMobile && (
+                <div className="mobile-help">
+                  <p><strong>Mobile Help:</strong> Try using a smaller image or better network connection.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="registration-form">
             
             <div className="form-group">
@@ -332,6 +419,10 @@ function ClassRegistration() {
                   setFormErrors(prev => ({...prev, name: ''}));
                 }}
                 className={formErrors.name ? 'error' : ''}
+                disabled={submitting}
+                // Mobile-specific attributes
+                inputMode="text"
+                autoComplete="name"
               />
               {formErrors.name && <div className="error-message">{formErrors.name}</div>}
             </div>
@@ -347,6 +438,10 @@ function ClassRegistration() {
                   setFormErrors(prev => ({...prev, email: ''}));
                 }}
                 className={formErrors.email ? 'error' : ''}
+                disabled={submitting}
+                // Mobile-specific attributes
+                inputMode="email"
+                autoComplete="email"
               />
               {formErrors.email && <div className="error-message">{formErrors.email}</div>}
             </div>
@@ -362,6 +457,10 @@ function ClassRegistration() {
                   setFormErrors(prev => ({...prev, phone: ''}));
                 }}
                 className={formErrors.phone ? 'error' : ''}
+                disabled={submitting}
+                // Mobile-specific attributes
+                inputMode="tel"
+                autoComplete="tel"
               />
               {formErrors.phone && <div className="error-message">{formErrors.phone}</div>}
             </div>
@@ -376,24 +475,50 @@ function ClassRegistration() {
                   setFormErrors(prev => ({...prev, paymentDate: ''}));
                 }}
                 className={formErrors.paymentDate ? 'error' : ''}
+                disabled={submitting}
+                max={getTodayDate()}
               />
               {formErrors.paymentDate && <div className="error-message">{formErrors.paymentDate}</div>}
             </div>
-
+          <div className="payment-info">
+              <div className="payment-header">
+                <span className="icon">💳</span>
+                <span>Payment Amount: R{classData.price}</span>
+              </div>
+              <p className="payment-instructions">
+                {classData.paymentInstructions || 'Please make payment and upload proof above.'}
+              </p>
+            </div>
+  {isMobile && (
+              <div className="mobile-tips">
+                <h4>📱 Mobile Tips:</h4>
+                <ul>
+                  <li>Use a stable Wi-Fi connection for faster uploads</li>
+                  <li>Keep image files under 3MB</li>
+                  <li>Take a clear photo of your payment receipt</li>
+                </ul>
+              </div>
+            )}
             <div className="form-group">
               <label>Proof of Payment</label>
               <div className="file-upload-section">
-                <div className={`file-upload ${formErrors.popImage ? 'error' : ''}`}>
+                <div className={`file-upload ${formErrors.popImage ? 'error' : ''} ${submitting ? 'disabled' : ''}`}>
                   <div className="upload-icon">📎</div>
                   <div className="upload-text">
                     <div className="upload-title">Upload payment proof</div>
-                    <div className="upload-subtitle">Click to select an image file</div>
+                    <div className="upload-subtitle">
+                      {isMobile ? 'Tap to take photo or select image' : 'Click to select an image file'}
+                      {isMobile && <br />}(Max 3MB)
+                    </div>
                   </div>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     className="file-input"
+                    disabled={submitting}
+                    // Mobile-specific attributes
+                    capture="environment" // Opens camera on mobile
                   />
                 </div>
                 {formErrors.popImage && <div className="error-message">{formErrors.popImage}</div>}
@@ -408,6 +533,7 @@ function ClassRegistration() {
                         setPopImage(null);
                         setImagePreview(null);
                       }}
+                      disabled={submitting}
                     >
                       Remove
                     </button>
@@ -416,19 +542,23 @@ function ClassRegistration() {
               </div>
             </div>
 
-            <div className="payment-info">
-              <div className="payment-header">
-                <span className="icon">💳</span>
-                <span>Payment Amount: R{classData.price}</span>
-              </div>
-              <p className="payment-instructions">
-                {classData.paymentInstructions || 'Please make payment and upload proof above.'}
-              </p>
-            </div>
-
-            <button type="submit" className="submit-button">
-              Complete Registration
+           
+            <button 
+              type="submit" 
+              className={`submit-button ${submitting ? 'submitting' : ''}`}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <div className="button-spinner"></div>
+                  Submitting...
+                </>
+              ) : (
+                'Complete Registration'
+              )}
             </button>
+
+          
           </form>
         </div>
       </div>

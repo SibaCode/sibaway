@@ -971,7 +971,7 @@ textarea.form-control {
   z-index: 1;
 }
 
-.business-name {
+.business-name-test {
   font-size: 2.5rem;
   font-weight: 700;
   margin: 0;
@@ -1215,8 +1215,12 @@ textarea.form-control {
     padding: 2rem 1rem;
   }
   
-  .business-name {
-    font-size: 2rem;
+  .business-name-test {
+     font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   }
   
   .empty-state {
@@ -2115,4 +2119,201 @@ textarea.form-control {
   .header-content h1 {
     font-size: 1.8rem;
   }
+}
+
+/* Submission states */
+.submitting {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.button-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+.submission-error {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.error-details {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0.5rem 0;
+}
+
+.form-note {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.file-upload.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  .class-registration {
+    padding: 10px;
+  }
+  
+  .registration-container {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+  
+  .form-card {
+    padding: 1.5rem;
+  }
+  
+  input, button {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  input[type="date"] {
+    min-height: 44px; /* Better touch target */
+  }
+  
+  .file-upload {
+    min-height: 80px; /* Larger touch target */
+  }
+  
+  .submit-button {
+    min-height: 50px;
+    font-size: 18px;
+  }
+}
+
+/* Mobile notices */
+.mobile-notice {
+  background: #e3f2fd;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-top: 8px;
+  display: inline-block;
+}
+
+.mobile-tip {
+  background: #fff3cd;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.mobile-help {
+  background: #f8d7da;
+  padding: 10px;
+  border-radius: 6px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.mobile-tips {
+  background: #e8f5e8;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.mobile-tips h4 {
+  margin: 0 0 8px 0;
+  color: #2e7d32;
+}
+
+.mobile-tips ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.mobile-tips li {
+  margin-bottom: 4px;
+}
+
+/* Better file input for mobile */
+.file-input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Prevent zoom on iOS */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Loading states */
+.submitting {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.button-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error states */
+.submission-error {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
