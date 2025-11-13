@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
@@ -19,8 +20,6 @@ function ClassRegistration() {
     phone: '',
     paymentDate: ''
   });
-  const [popImage, setPopImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
   const [formErrors, setFormErrors] = useState({});
 
   const fetchClassData = React.useCallback(async () => {
@@ -94,16 +93,6 @@ function ClassRegistration() {
     fetchClassData();
   }, [fetchClassData]);
 
-  // Simple file to base64 conversion without compression
-  const convertToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
-    });
-  };
-
   const validateForm = () => {
     const errors = {};
     
@@ -115,38 +104,9 @@ function ClassRegistration() {
     }
     if (!formData.phone.trim()) errors.phone = 'Please enter your phone number';
     if (!formData.paymentDate) errors.paymentDate = 'Please select payment date';
-    if (!popImage) errors.popImage = 'Please upload proof of payment';
     
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Simple file size check
-      const maxSize = 4 * 1024 * 1024; // 2MB for all devices
-      if (file.size > maxSize) {
-        setFormErrors({ popImage: 'File is too large. Please select an image under 4MB.' });
-        return;
-      }
-
-      if (!file.type.startsWith('image/')) {
-        setFormErrors({ popImage: 'Please select an image file (JPG, PNG)' });
-        return;
-      }
-
-      setPopImage(file);
-      setFormErrors(prev => ({ ...prev, popImage: '' }));
-      
-      try {
-        const base64 = await convertToBase64(file);
-        setImagePreview(base64);
-      } catch (error) {
-        console.error('Error converting image:', error);
-        setFormErrors({ popImage: 'Error uploading image. Please try a different image.' });
-      }
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -160,21 +120,11 @@ function ClassRegistration() {
     setError(null);
 
     try {
-      console.log('Starting registration submission...');
+      console.log('Starting registration submission (without POP)...');
       
-      // Convert image to base64
-      let popBase64;
-      try {
-        popBase64 = await convertToBase64(popImage);
-        console.log('Image converted successfully, size:', popBase64.length);
-      } catch (convertError) {
-        console.error('Image conversion failed:', convertError);
-        throw new Error('IMAGE_CONVERSION_FAILED');
-      }
-
       const studentId = uuidv4();
 
-      // Create minimal registration data to reduce payload size
+      // Simplified registration data without POP
       const registrationData = {
         classId: classData.id,
         studentId: studentId,
@@ -183,19 +133,23 @@ function ClassRegistration() {
         studentPhone: formData.phone.trim(),
         paymentDate: formData.paymentDate,
         amountPaid: classData.price,
-        popBase64: popBase64, // Store the base64 string
-        popFileName: popImage.name,
         status: 'pending',
         registeredAt: new Date(),
         organizationId: classData.organizationId || '',
         businessName: businessData?.name || 'SkillShare',
+        adminEmail: businessData?.email || 'mvubusiba@gmail.com',
         className: classData.name,
-        classPrice: classData.price
+        classPrice: classData.price,
+        businessSlug,
+        courseSlug,
+        venueSlug: venue,
+        dateSlug: date,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
       };
 
-      console.log('Submitting to Firestore...');
+      console.log('Submitting registration data:', registrationData);
       
-      // Simple submission without timeout
       const docRef = await addDoc(collection(db, 'registrations'), registrationData);
       console.log('Registration successful! Document ID:', docRef.id);
 
@@ -203,18 +157,20 @@ function ClassRegistration() {
 
     } catch (error) {
       console.error('Submission error:', error);
-      console.error('Error details:', error.code, error.message);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
       
       let errorMessage = 'Failed to submit registration. ';
       
-      if (error.message === 'IMAGE_CONVERSION_FAILED') {
-        errorMessage = 'Failed to process the image. Please try a different image file.';
-      } else if (error.code === 'permission-denied') {
+      if (error.code === 'permission-denied') {
         errorMessage = 'Database permission denied. Please contact support.';
       } else if (error.code === 'unavailable') {
         errorMessage = 'Network error. Please check your internet connection and try again.';
-      } else if (error.message.includes('quota') || error.message.includes('Quota')) {
-        errorMessage = 'File is too large. Please try a smaller image (under 1MB).';
+      } else if (error.code === 'resource-exhausted') {
+        errorMessage = 'Database quota exceeded. Please try again later.';
       } else {
         errorMessage += 'Please try again. If the problem continues, contact support.';
       }
@@ -307,19 +263,28 @@ function ClassRegistration() {
                 <strong>Student:</strong> {formData.name}
               </div>
               <div className="summary-item">
+                <strong>Email:</strong> {formData.email}
+              </div>
+              <div className="summary-item">
+                <strong>Phone:</strong> {formData.phone}
+              </div>
+              <div className="summary-item">
                 <strong>Class:</strong> {classData.name}
               </div>
               <div className="summary-item">
                 <strong>Amount Paid:</strong> R{classData.price}
+              </div>
+              <div className="summary-item">
+                <strong>Payment Date:</strong> {new Date(formData.paymentDate).toLocaleDateString()}
               </div>
             </div>
 
             <div className="next-steps">
               <h3>What happens next?</h3>
               <ul>
-                <li>We'll review your payment within 24 hours</li>
-                <li>You'll receive a confirmation email</li>
-                <li>Keep your payment receipt safe</li>
+                <li>We'll contact you within 24 hours to verify your payment</li>
+                <li>Please keep your payment receipt ready</li>
+                <li>You'll receive a confirmation email once payment is verified</li>
               </ul>
             </div>
 
@@ -379,7 +344,7 @@ function ClassRegistration() {
               <div className="error-icon">❌</div>
               <p>{error}</p>
               <div className="error-help">
-                <p><strong>Tip:</strong> Try using a smaller image file (under 1MB) and ensure good internet connection.</p>
+                <p><strong>Debug Info:</strong> Check browser console for detailed error information.</p>
               </div>
             </div>
           )}
@@ -387,7 +352,7 @@ function ClassRegistration() {
           <form onSubmit={handleSubmit} className="registration-form">
             
             <div className="form-group">
-              <label>Full Name</label>
+              <label>Full Name *</label>
               <input
                 type="text"
                 placeholder="Enter your full name"
@@ -403,7 +368,7 @@ function ClassRegistration() {
             </div>
 
             <div className="form-group">
-              <label>Email Address</label>
+              <label>Email Address *</label>
               <input
                 type="email"
                 placeholder="your.email@example.com"
@@ -419,7 +384,7 @@ function ClassRegistration() {
             </div>
 
             <div className="form-group">
-              <label>Phone Number</label>
+              <label>Phone Number *</label>
               <input
                 type="tel"
                 placeholder="072 123 4567"
@@ -435,7 +400,7 @@ function ClassRegistration() {
             </div>
 
             <div className="form-group">
-              <label>Payment Date</label>
+              <label>Payment Date *</label>
               <input
                 type="date"
                 value={formData.paymentDate}
@@ -456,47 +421,15 @@ function ClassRegistration() {
                 <span>Payment Amount: R{classData.price}</span>
               </div>
               <p className="payment-instructions">
-                {classData.paymentInstructions || 'Please make payment and upload proof above.'}
+                {classData.paymentInstructions || 'Please make the payment and keep your receipt. We will contact you to verify.'}
               </p>
             </div>
 
-            <div className="form-group">
-              <label>Proof of Payment</label>
-              <div className="file-upload-section">
-                <div className={`file-upload ${formErrors.popImage ? 'error' : ''} ${submitting ? 'disabled' : ''}`}>
-                  <div className="upload-icon">📎</div>
-                  <div className="upload-text">
-                    <div className="upload-title">Upload payment proof</div>
-                    <div className="upload-subtitle">
-                      Click to select an image file (Max 4MB)
-                    </div>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="file-input"
-                    disabled={submitting}
-                  />
-                </div>
-                {formErrors.popImage && <div className="error-message">{formErrors.popImage}</div>}
-                
-                {imagePreview && (
-                  <div className="image-preview">
-                    <img src={imagePreview} alt="Payment proof" />
-                    <button 
-                      type="button" 
-                      className="remove-image"
-                      onClick={() => {
-                        setPopImage(null);
-                        setImagePreview(null);
-                      }}
-                      disabled={submitting}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
+            <div className="pop-note">
+              <div className="note-icon">📝</div>
+              <div className="note-content">
+                <strong>Note about Proof of Payment:</strong>
+                <p>We'll contact you after registration to verify your payment. Please keep your payment receipt ready.</p>
               </div>
             </div>
 
@@ -514,10 +447,6 @@ function ClassRegistration() {
                 'Complete Registration'
               )}
             </button>
-
-            <div className="form-tips">
-              <p><strong>Note:</strong> For best results, use images under 1MB in size.</p>
-            </div>
           </form>
         </div>
       </div>
