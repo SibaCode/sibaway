@@ -171,10 +171,10 @@ const WelcomePage = () => {
                 </div>
                 
                 {/* Real registration trend chart */}
-                <div className="preview-chart">
+                {/* <div className="preview-chart">
                   <div className="chart-title">Weekly Registrations</div>
                   <LiveRegistrationChart />
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
@@ -192,92 +192,92 @@ const WelcomePage = () => {
 };
 
 // Component for live registration chart
-const LiveRegistrationChart = () => {
-  const [weeklyData, setWeeklyData] = useState([]);
-  const [loading, setLoading] = useState(true);
+// const LiveRegistrationChart = () => {
+//   const [weeklyData, setWeeklyData] = useState([]);
+//   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchWeeklyRegistrations();
-  }, []);
+//   useEffect(() => {
+//     fetchWeeklyRegistrations();
+//   }, []);
 
-  const fetchWeeklyRegistrations = async () => {
-    try {
-      const registrationsSnapshot = await getDocs(collection(db, 'registrations'));
-      const registrations = registrationsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+//   const fetchWeeklyRegistrations = async () => {
+//     try {
+//       const registrationsSnapshot = await getDocs(collection(db, 'registrations'));
+//       const registrations = registrationsSnapshot.docs.map(doc => ({
+//         id: doc.id,
+//         ...doc.data()
+//       }));
 
-      // Get last 7 days
-      const last7Days = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+//       // Get last 7 days
+//       const last7Days = [];
+//       for (let i = 6; i >= 0; i--) {
+//         const date = new Date();
+//         date.setDate(date.getDate() - i);
+//         const dateStr = date.toISOString().split('T')[0];
         
-        const dayRegistrations = registrations.filter(reg => 
-          reg.paymentDate === dateStr
-        ).length;
+//         const dayRegistrations = registrations.filter(reg => 
+//           reg.paymentDate === dateStr
+//         ).length;
 
-        last7Days.push({
-          day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          count: dayRegistrations
-        });
-      }
+//         last7Days.push({
+//           day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+//           count: dayRegistrations
+//         });
+//       }
 
-      setWeeklyData(last7Days);
-    } catch (error) {
-      console.error('Error fetching weekly data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+//       setWeeklyData(last7Days);
+//     } catch (error) {
+//       console.error('Error fetching weekly data:', error);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
-  if (loading) {
-    return (
-      <div className="chart-loading">
-        <div className="loading-bars">
-          {[1, 2, 3, 4, 5, 6, 7].map((_, index) => (
-            <div key={index} className="loading-bar"></div>
-          ))}
-        </div>
-        <div className="chart-labels">
-          <span>Mon</span>
-          <span>Tue</span>
-          <span>Wed</span>
-          <span>Thu</span>
-          <span>Fri</span>
-          <span>Sat</span>
-          <span>Sun</span>
-        </div>
-      </div>
-    );
-  }
+//   if (loading) {
+//     return (
+//       <div className="chart-loading">
+//         <div className="loading-bars">
+//           {[1, 2, 3, 4, 5, 6, 7].map((_, index) => (
+//             <div key={index} className="loading-bar"></div>
+//           ))}
+//         </div>
+//         <div className="chart-labels">
+//           <span>Mon</span>
+//           <span>Tue</span>
+//           <span>Wed</span>
+//           <span>Thu</span>
+//           <span>Fri</span>
+//           <span>Sat</span>
+//           <span>Sun</span>
+//         </div>
+//       </div>
+//     );
+//   }
 
-  const maxCount = Math.max(...weeklyData.map(d => d.count), 1);
+//   const maxCount = Math.max(...weeklyData.map(d => d.count), 1);
 
-  return (
-    <>
-      <div className="chart-bars">
-        {weeklyData.map((day, index) => (
-          <div 
-            key={index}
-            className="chart-bar"
-            style={{ 
-              height: `${(day.count / maxCount) * 80}%`,
-              backgroundColor: day.count > 0 ? '#3b82f6' : '#e5e7eb'
-            }}
-            title={`${day.count} registrations`}
-          ></div>
-        ))}
-      </div>
-      <div className="chart-labels">
-        {weeklyData.map((day, index) => (
-          <span key={index}>{day.day}</span>
-        ))}
-      </div>
-    </>
-  );
-};
+//   return (
+//     <>
+//       <div className="chart-bars">
+//         {weeklyData.map((day, index) => (
+//           <div 
+//             key={index}
+//             className="chart-bar"
+//             style={{ 
+//               height: `${(day.count / maxCount) * 80}%`,
+//               backgroundColor: day.count > 0 ? '#3b82f6' : '#e5e7eb'
+//             }}
+//             title={`${day.count} registrations`}
+//           ></div>
+//         ))}
+//       </div>
+//       <div className="chart-labels">
+//         {weeklyData.map((day, index) => (
+//           <span key={index}>{day.day}</span>
+//         ))}
+//       </div>
+//     </>
+//   );
+// };
 
 export default WelcomePage;
