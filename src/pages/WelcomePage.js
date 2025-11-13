@@ -56,11 +56,11 @@ const WelcomePage = () => {
   };
 
   // Calculate satisfaction rate based on attendance (you can modify this logic)
-  const calculateSatisfactionRate = () => {
+  // const calculateSatisfactionRate = () => {
     // For now, we'll use a placeholder calculation
     // In a real scenario, you might calculate this from student feedback or attendance rates
-    return '95%';
-  };
+    // return '95%';
+  // };
 
   return (
     <div className="hero-section">
@@ -104,12 +104,12 @@ const WelcomePage = () => {
                 </div>
                 <div className="stat-label">Students</div>
               </div>
-              <div className="stat">
+              {/* <div className="stat">
                 <div className="stat-number">
                   {loading ? '...' : calculateSatisfactionRate()}
                 </div>
                 <div className="stat-label">Satisfaction</div>
-              </div>
+              </div> */}
               <div className="stat">
                 <div className="stat-number">
                   {loading ? '...' : platformStats.totalClasses.toLocaleString()}+
