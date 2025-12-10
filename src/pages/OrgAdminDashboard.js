@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { v4 as uuidv4 } from 'uuid';
-import ClassStudentManagement from './ClassStudentManagement';
+
 function OrgAdminDashboard() {
   const { userData, logout } = useAuth();
   const [classes, setClasses] = useState([]);
@@ -23,10 +23,10 @@ function OrgAdminDashboard() {
   const [showCreateClass, setShowCreateClass] = useState(false);
   const [showEditClass, setShowEditClass] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-// Add this to your existing state in OrgAdminDashboard
-const [selectedClass, setSelectedClass] = useState(null);
-// const [studentFilter, setStudentFilter] = useState('all');
-// const [studentSearch, setStudentSearch] = useState('');
+  const [showStudentReviewModal, setShowStudentReviewModal] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [exportingPDF, setExportingPDF] = useState(false);
+
   // Form states
   const [classForm, setClassForm] = useState({
     name: '',
@@ -49,7 +49,7 @@ const [selectedClass, setSelectedClass] = useState(null);
     console.log('Organization ID:', userData?.organizationId);
   }, [userData]);
 
-  // Memoized fetch functions to prevent dependency issues
+  // Memoized fetch functions
   const fetchClasses = useCallback(async () => {
     if (!userData?.organizationId) return;
     
@@ -65,80 +65,50 @@ const [selectedClass, setSelectedClass] = useState(null);
     setClasses(classesData);
   }, [userData?.organizationId]);
 
- const fetchRegistrations = useCallback(async () => {
-  if (!userData?.organizationId) return;
-  
-  // Fetch pending registrations
-  const pendingQ = query(
-    collection(db, 'registrations'),
-    where('organizationId', '==', userData.organizationId),
-    where('status', '==', 'pending')
-  );
-  
-  const approvedQ = query(
-    collection(db, 'registrations'),
-    where('organizationId', '==', userData.organizationId),
-    where('status', '==', 'approved')
-  );
-
-  const [pendingSnapshot, approvedSnapshot] = await Promise.all([
-    getDocs(pendingQ),
-    getDocs(approvedQ)
-  ]);
-
-  const pendingData = await Promise.all(
-    pendingSnapshot.docs.map(async (regDoc) => {
-      const regData = regDoc.data();
-      let classData = {};
-      
-      if (regData.classId) {
-        try {
-          const classDoc = await getDoc(doc(db, 'classes', regData.classId));
-          if (classDoc.exists()) {
-            classData = classDoc.data();
+  const fetchRegistrations = useCallback(async () => {
+    if (!userData?.organizationId) return;
+    
+    // Fetch all registrations
+    const registrationsQ = query(
+      collection(db, 'registrations'),
+      where('organizationId', '==', userData.organizationId)
+    );
+    
+    const snapshot = await getDocs(registrationsQ);
+    
+    const allRegistrations = await Promise.all(
+      snapshot.docs.map(async (regDoc) => {
+        const regData = regDoc.data();
+        let classData = {};
+        
+        if (regData.classId) {
+          try {
+            const classDoc = await getDoc(doc(db, 'classes', regData.classId));
+            if (classDoc.exists()) {
+              classData = classDoc.data();
+            }
+          } catch (error) {
+            console.error('Error fetching class data:', error);
           }
-        } catch (error) {
-          console.error('Error fetching class data:', error);
         }
-      }
-      
-      return {
-        id: regDoc.id,
-        ...regData,
-        class: classData, // Store full class data, not just name
-        classId: regData.classId // Ensure classId is preserved
-      };
-    })
-  );
+        
+        return {
+          id: regDoc.id,
+          ...regData,
+          class: classData,
+          classId: regData.classId
+        };
+      })
+    );
+    
+    const pending = allRegistrations.filter(reg => reg.status === 'pending');
+    const approved = allRegistrations.filter(reg => reg.status === 'approved');
+    // const rejected = allRegistrations.filter(reg => reg.status === 'rejected');
+    
+    setPendingRegistrations(pending);
+    setApprovedRegistrations(approved);
+  }, [userData?.organizationId]);
 
-  const approvedData = await Promise.all(
-    approvedSnapshot.docs.map(async (regDoc) => {
-      const regData = regDoc.data();
-      let classData = {};
-      
-      if (regData.classId) {
-        try {
-          const classDoc = await getDoc(doc(db, 'classes', regData.classId));
-          if (classDoc.exists()) {
-            classData = classDoc.data();
-          }
-        } catch (error) {
-          console.error('Error fetching class data:', error);
-        }
-      }
-      
-      return {
-        id: regDoc.id,
-        ...regData,
-        class: classData, // Store full class data
-        classId: regData.classId // Ensure classId is preserved
-      };
-    })
-  );
-  
-  setPendingRegistrations(pendingData);
-  setApprovedRegistrations(approvedData);
-}, [userData?.organizationId]);
   // Load data when organizationId is available
   useEffect(() => {
     if (userData?.organizationId) {
@@ -152,7 +122,7 @@ const [selectedClass, setSelectedClass] = useState(null);
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   };
 
-  // Class Management Functions - FIXED VERSION
+  // Class Management Functions
   const createClass = async (e) => {
     e.preventDefault();
     
@@ -163,13 +133,11 @@ const [selectedClass, setSelectedClass] = useState(null);
         return;
       }
 
-      // Validate user data
       if (!userData?.organizationId) {
         showNotification('User organization data is missing. Please log out and log in again.', 'error');
         return;
       }
 
-      // Generate URL-friendly slugs with better null handling
       const generateSlug = (text) => {
         if (!text || text.trim() === '') return 'business';
         return text
@@ -180,7 +148,6 @@ const [selectedClass, setSelectedClass] = useState(null);
           .substring(0, 30);
       };
 
-      // Get business name with multiple fallbacks
       const getBusinessName = () => {
         return userData?.organizationName || userData?.name || 'My Business';
       };
@@ -188,12 +155,10 @@ const [selectedClass, setSelectedClass] = useState(null);
       const businessName = getBusinessName();
       const businessSlug = generateSlug(businessName);
       
-      // Generate course slug
       let courseSlug = generateSlug(classForm.name);
       let finalCourseSlug = courseSlug;
       let counter = 1;
 
-      // Check for slug collisions
       const existingClassesQuery = query(
         collection(db, 'classes'),
         where('organizationId', '==', userData.organizationId)
@@ -206,10 +171,7 @@ const [selectedClass, setSelectedClass] = useState(null);
         counter++;
       }
 
-      // Generate venue slug
       const venueSlug = generateSlug(classForm.venue || 'online');
-      
-      // Generate date slug (use start date or current date)
       const dateSlug = classForm.startDate 
         ? classForm.startDate.replace(/-/g, '')
         : new Date().toISOString().split('T')[0].replace(/-/g, '');
@@ -217,7 +179,6 @@ const [selectedClass, setSelectedClass] = useState(null);
       const classId = uuidv4();
       const registrationLink = `${window.location.origin}/${businessSlug}/${finalCourseSlug}/${venueSlug}/${dateSlug}`;
       
-      // Create class data with proper fallbacks
       const classData = {
         name: classForm.name,
         description: classForm.description,
@@ -241,8 +202,6 @@ const [selectedClass, setSelectedClass] = useState(null);
         enrolledCount: 0
       };
 
-      console.log('Creating class with data:', classData);
-      
       await addDoc(collection(db, 'classes'), classData);
       
       setShowCreateClass(false);
@@ -315,7 +274,6 @@ const [selectedClass, setSelectedClass] = useState(null);
 
   const duplicateClass = async (classItem) => {
     try {
-      // Generate URL-friendly slugs with better null handling
       const generateSlug = (text) => {
         if (!text || text.trim() === '') return 'business';
         return text
@@ -326,7 +284,6 @@ const [selectedClass, setSelectedClass] = useState(null);
           .substring(0, 30);
       };
 
-      // Get business name with multiple fallbacks
       const getBusinessName = () => {
         return userData?.organizationName || userData?.name || 'My Business';
       };
@@ -411,7 +368,12 @@ const [selectedClass, setSelectedClass] = useState(null);
     }
   };
 
-  // Registration Management
+  // Student Management Functions
+  const handleViewStudentDetails = (student) => {
+    setSelectedStudent(student);
+    setShowStudentReviewModal(true);
+  };
+
   const handleApproveRegistration = async (registrationId) => {
     try {
       await updateDoc(doc(db, 'registrations', registrationId), {
@@ -419,6 +381,8 @@ const [selectedClass, setSelectedClass] = useState(null);
         approvedAt: new Date()
       });
       fetchRegistrations();
+      setShowStudentReviewModal(false);
+      setSelectedStudent(null);
       showNotification('Registration approved!');
     } catch (error) {
       console.error('Error approving registration:', error);
@@ -433,6 +397,8 @@ const [selectedClass, setSelectedClass] = useState(null);
         rejectedAt: new Date()
       });
       fetchRegistrations();
+      setShowStudentReviewModal(false);
+      setSelectedStudent(null);
       showNotification('Registration rejected.');
     } catch (error) {
       console.error('Error rejecting registration:', error);
@@ -458,412 +424,312 @@ const [selectedClass, setSelectedClass] = useState(null);
     navigator.clipboard.writeText(text);
     showNotification(message);
   };
-// Add these export functions before the return statement in your component
 
-const exportToCSV = (type) => {
-  let csvContent = '';
-  let filename = '';
+  // PDF Export Functions
+  const exportToPDF = async (type) => {
+    try {
+      setExportingPDF(true);
+      
+      // Dynamically import jsPDF
+      const { jsPDF } = await import('jspdf');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      let yPosition = 20;
+      
+      // Add header
+      pdf.setFontSize(20);
+      pdf.setTextColor(44, 62, 80);
+      pdf.text(`${userData?.organizationName || 'Business'} - ${type.charAt(0).toUpperCase() + type.slice(1)} Report`, 20, yPosition);
+      
+      pdf.setFontSize(12);
+      pdf.setTextColor(128, 128, 128);
+      pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, yPosition + 10);
+      
+      yPosition += 25;
+      
+      // Add content based on type
+      switch (type) {
+        case 'summary':
+          generateSummaryPDF(pdf, yPosition);
+          break;
+        case 'registrations':
+          generateRegistrationsPDF(pdf, yPosition);
+          break;
+        case 'revenue':
+          generateRevenuePDF(pdf, yPosition);
+          break;
+        default:
+          break;
+      }
+      
+      // Save PDF
+      pdf.save(`${type}-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      showNotification(`${type} PDF exported successfully!`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showNotification('Error generating PDF', 'error');
+    } finally {
+      setExportingPDF(false);
+    }
+  };
 
-  switch (type) {
-    case 'registrations':
-      filename = `registrations-${new Date().toISOString().split('T')[0]}.csv`;
-      csvContent = convertRegistrationsToCSV();
-      break;
-    case 'revenue':
-      filename = `revenue-report-${new Date().toISOString().split('T')[0]}.csv`;
-      csvContent = convertRevenueToCSV();
-      break;
-    case 'attendance':
-      filename = `attendance-report-${new Date().toISOString().split('T')[0]}.csv`;
-      csvContent = convertAttendanceToCSV();
-      break;
-    default:
-      return;
-  }
-
-  downloadCSV(csvContent, filename);
-  showNotification(`${type} report exported successfully!`);
-};
-
-const convertRegistrationsToCSV = () => {
-  const headers = ['Student Name', 'Email', 'Phone', 'Class', 'Amount Paid', 'Payment Date', 'Status', 'Attendance'];
-  
-  const rows = approvedRegistrations.map(reg => [
-    reg.studentName || '',
-    reg.studentEmail || '',
-    reg.studentPhone || '',
-    reg.class?.name || '',
-    reg.amountPaid || 0,
-    reg.paymentDate || '',
-    'approved',
-    reg.attended === true ? 'Present' : reg.attended === false ? 'Absent' : 'Not Marked'
-  ]);
-
-  return [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
-};
-
-const convertRevenueToCSV = () => {
-  const headers = ['Class Name', 'Students', 'Total Revenue', 'Average Revenue Per Student', 'Status'];
-  
-  const rows = classes.map(classItem => {
-    const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-    const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-    const avgRevenue = classStudents.length > 0 ? classRevenue / classStudents.length : 0;
-
-    return [
-      classItem.name,
-      classStudents.length,
-      classRevenue.toFixed(2),
-      avgRevenue.toFixed(2),
-      classItem.status || 'active'
+  const generateSummaryPDF = (pdf, startY) => {
+    let y = startY;
+    
+    // Key Metrics
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Key Metrics', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    
+    const metrics = [
+      `Total Classes: ${classes.length}`,
+      `Active Classes: ${classes.filter(c => c.status === 'active').length}`,
+      `Archived Classes: ${classes.filter(c => c.status === 'archived').length}`,
+      `Total Students: ${approvedRegistrations.length}`,
+      `Pending Approvals: ${pendingRegistrations.length}`,
+      `Total Revenue: R${totalRevenue.toFixed(2)}`,
+      `Pending Revenue: R${pendingRevenue.toFixed(2)}`,
+      `Average Revenue per Student: R${approvedRegistrations.length > 0 ? (totalRevenue / approvedRegistrations.length).toFixed(2) : '0.00'}`
     ];
-  });
+    
+    metrics.forEach(metric => {
+      pdf.text(metric, 20, y);
+      y += 7;
+    });
+    
+    y += 10;
+    
+    // Class Performance Table
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Class Performance', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(8);
+    const headers = ['Class Name', 'Status', 'Students', 'Revenue', 'Capacity'];
+    let x = 20;
+    
+    // Headers
+    headers.forEach(header => {
+      pdf.setFont(undefined, 'bold');
+      pdf.text(header, x, y);
+      x += 35;
+    });
+    
+    y += 7;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, y, 190, y);
+    y += 4;
+    
+    // Rows
+    pdf.setFont(undefined, 'normal');
+    classes.forEach(classItem => {
+      const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
+      const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
+      const capacity = classItem.capacity || 'Unlimited';
+      
+      x = 20;
+      const row = [
+        classItem.name.substring(0, 15) + (classItem.name.length > 15 ? '...' : ''),
+        classItem.status || 'active',
+        classStudents.length.toString(),
+        `R${classRevenue.toFixed(2)}`,
+        capacity.toString()
+      ];
+      
+      row.forEach(cell => {
+        pdf.text(cell, x, y);
+        x += 35;
+      });
+      
+      y += 6;
+      
+      // Add new page if needed
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+    });
+  };
 
-  return [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
-};
-
-const convertAttendanceToCSV = () => {
-  const headers = ['Class Name', 'Total Students', 'Present', 'Absent', 'Not Marked', 'Attendance Rate'];
-  
-  const rows = classes.map(classItem => {
-    const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-    const presentCount = classStudents.filter(s => s.attended === true).length;
-    const absentCount = classStudents.filter(s => s.attended === false).length;
-    const notMarkedCount = classStudents.filter(s => s.attended === undefined).length;
-    const attendanceRate = classStudents.length > 0 
-      ? ((presentCount / classStudents.length) * 100).toFixed(1) 
-      : 0;
-
-    return [
-      classItem.name,
-      classStudents.length,
-      presentCount,
-      absentCount,
-      notMarkedCount,
-      `${attendanceRate}%`
+  const generateRegistrationsPDF = (pdf, startY) => {
+    let y = startY;
+    
+    // Registration Summary
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Registration Summary', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    
+    const summary = [
+      `Total Registrations: ${approvedRegistrations.length + pendingRegistrations.length}`,
+      `Approved: ${approvedRegistrations.length}`,
+      `Pending: ${pendingRegistrations.length}`,
+      `Approval Rate: ${approvedRegistrations.length > 0 ? ((approvedRegistrations.length / (approvedRegistrations.length + pendingRegistrations.length)) * 100).toFixed(1) : 0}%`
     ];
-  });
+    
+    summary.forEach(item => {
+      pdf.text(item, 20, y);
+      y += 7;
+    });
+    
+    y += 10;
+    
+    // Recent Registrations Table
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Recent Registrations', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(8);
+    const headers = ['Name', 'Class', 'Amount', 'Status', 'Date'];
+    let x = 20;
+    const colWidths = [40, 40, 30, 30, 30];
+    
+    // Headers
+    headers.forEach((header, i) => {
+      pdf.setFont(undefined, 'bold');
+      pdf.text(header, x, y);
+      x += colWidths[i];
+    });
+    
+    y += 7;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, y, 190, y);
+    y += 4;
+    
+    // Rows (limit to 20 most recent)
+    const allRegistrations = [...approvedRegistrations, ...pendingRegistrations];
+    const recentRegistrations = allRegistrations
+      .sort((a, b) => new Date(b.paymentDate || b.createdAt) - new Date(a.paymentDate || a.createdAt))
+      .slice(0, 20);
+    
+    recentRegistrations.forEach(reg => {
+      x = 20;
+      const row = [
+        reg.studentName?.substring(0, 15) + (reg.studentName?.length > 15 ? '...' : '') || 'N/A',
+        reg.class?.name?.substring(0, 15) + (reg.class?.name?.length > 15 ? '...' : '') || 'N/A',
+        `R${reg.amountPaid || 0}`,
+        reg.status,
+        reg.paymentDate || 'N/A'
+      ];
+      
+      row.forEach((cell, i) => {
+        pdf.text(cell, x, y);
+        x += colWidths[i];
+      });
+      
+      y += 6;
+      
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+    });
+  };
 
-  return [headers, ...rows].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
-};
+  const generateRevenuePDF = (pdf, startY) => {
+    let y = startY;
+    
+    // Revenue Summary
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Revenue Analysis', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    
+    const summary = [
+      `Total Revenue: R${totalRevenue.toFixed(2)}`,
+      `Pending Revenue: R${pendingRevenue.toFixed(2)}`,
+      `Average Payment: R${approvedRegistrations.length > 0 ? (totalRevenue / approvedRegistrations.length).toFixed(2) : '0.00'}`,
+      `Total Transactions: ${approvedRegistrations.length}`
+    ];
+    
+    summary.forEach(item => {
+      pdf.text(item, 20, y);
+      y += 7;
+    });
+    
+    y += 10;
+    
+    // Revenue by Class
+    pdf.setFontSize(16);
+    pdf.setTextColor(44, 62, 80);
+    pdf.text('Revenue by Class', 20, y);
+    y += 10;
+    
+    pdf.setFontSize(8);
+    const headers = ['Class Name', 'Students', 'Revenue', 'Avg/Student', 'Status'];
+    let x = 20;
+    const colWidths = [40, 25, 35, 35, 25];
+    
+    // Headers
+    headers.forEach((header, i) => {
+      pdf.setFont(undefined, 'bold');
+      pdf.text(header, x, y);
+      x += colWidths[i];
+    });
+    
+    y += 7;
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(20, y, 190, y);
+    y += 4;
+    
+    // Rows
+    pdf.setFont(undefined, 'normal');
+    const revenueByClass = classes.map(classItem => {
+      const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
+      const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
+      const avgRevenue = classStudents.length > 0 ? classRevenue / classStudents.length : 0;
+      
+      return {
+        name: classItem.name,
+        students: classStudents.length,
+        revenue: classRevenue,
+        avgRevenue: avgRevenue,
+        status: classItem.status || 'active'
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+    
+    revenueByClass.forEach(item => {
+      x = 20;
+      const row = [
+        item.name.substring(0, 15) + (item.name.length > 15 ? '...' : ''),
+        item.students.toString(),
+        `R${item.revenue.toFixed(2)}`,
+        `R${item.avgRevenue.toFixed(2)}`,
+        item.status
+      ];
+      
+      row.forEach((cell, i) => {
+        pdf.text(cell, x, y);
+        x += colWidths[i];
+      });
+      
+      y += 6;
+      
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+    });
+  };
 
-const downloadCSV = (csvContent, filename) => {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
   // Analytics Calculations
   const totalRevenue = approvedRegistrations.reduce((sum, reg) => sum + (reg.amountPaid || 0), 0);
   const pendingRevenue = pendingRegistrations.reduce((sum, reg) => sum + (reg.amountPaid || 0), 0);
   const totalStudents = approvedRegistrations.length;
-// PDF Export Functions
-const exportToPDF = async (type) => {
-  try {
-    // Dynamically import jsPDF to reduce bundle size
-    const { jsPDF } = await import('jspdf');
-    const pdf = new jsPDF();
-    
-    // Add organization header
-    pdf.setFontSize(20);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(userData?.organizationName || 'Business Report', 20, 30);
-    
-    pdf.setFontSize(12);
-    pdf.setTextColor(128, 128, 128);
-    pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, 40);
-    
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(20, 45, 190, 45);
-    
-    let content = [];
-    let title = '';
+  const allRegistrations = [...pendingRegistrations, ...approvedRegistrations];
 
-    switch (type) {
-      case 'summary':
-        title = 'Business Summary Report';
-        content = generateSummaryContent();
-        break;
-      case 'registrations':
-        title = 'Student Registrations Report';
-        content = generateRegistrationsContent();
-        break;
-      case 'revenue':
-        title = 'Revenue Analysis Report';
-        content = generateRevenueContent();
-        break;
-      default:
-        return;
-    }
-
-    // Add title
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text(title, 20, 60);
-
-    // Add content
-    let yPosition = 80;
-    content.forEach(item => {
-      if (yPosition > 270) {
-        pdf.addPage();
-        yPosition = 20;
-      }
-
-      if (item.type === 'heading') {
-        pdf.setFontSize(12);
-        pdf.setTextColor(44, 62, 80);
-        pdf.setFont(undefined, 'bold');
-        pdf.text(item.text, 20, yPosition);
-        yPosition += 8;
-      } else if (item.type === 'text') {
-        pdf.setFontSize(10);
-        pdf.setTextColor(0, 0, 0);
-        pdf.setFont(undefined, 'normal');
-        
-        // Split long text into multiple lines
-        const lines = pdf.splitTextToSize(item.text, 170);
-        pdf.text(lines, 20, yPosition);
-        yPosition += (lines.length * 6) + 2;
-      } else if (item.type === 'table') {
-        // Simple table implementation
-        pdf.setFontSize(9);
-        let tableY = yPosition;
-        
-        // Table headers
-        pdf.setFont(undefined, 'bold');
-        item.headers.forEach((header, index) => {
-          pdf.text(header, 20 + (index * 45), tableY);
-        });
-        
-        tableY += 6;
-        pdf.setDrawColor(200, 200, 200);
-        pdf.line(20, tableY, 190, tableY);
-        tableY += 4;
-        
-        // Table rows
-        pdf.setFont(undefined, 'normal');
-        item.rows.forEach((row, rowIndex) => {
-          if (tableY > 270) {
-            pdf.addPage();
-            tableY = 20;
-          }
-          
-          row.forEach((cell, cellIndex) => {
-            pdf.text(cell.toString(), 20 + (cellIndex * 45), tableY);
-          });
-          tableY += 6;
-        });
-        
-        yPosition = tableY + 10;
-      } else if (item.type === 'spacer') {
-        yPosition += 10;
-      }
-    });
-
-    // Add footer
-    const pageCount = pdf.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      pdf.setPage(i);
-      pdf.setFontSize(8);
-      pdf.setTextColor(128, 128, 128);
-      pdf.text(`Page ${i} of ${pageCount}`, 180, 290, { align: 'right' });
-    }
-
-    // Save PDF
-    pdf.save(`${type}-report-${new Date().toISOString().split('T')[0]}.pdf`);
-    showNotification(`${type} PDF exported successfully!`);
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    showNotification('Error generating PDF', 'error');
-  }
-};
-
-const generateSummaryContent = () => {
-  const content = [];
-  
-  // Key Metrics
-  content.push({ type: 'heading', text: 'Key Business Metrics' });
-  content.push({ type: 'text', text: `Total Classes: ${classes.length}` });
-  content.push({ type: 'text', text: `Total Students: ${totalStudents}` });
-  content.push({ type: 'text', text: `Total Revenue: R${totalRevenue.toFixed(2)}` });
-  content.push({ type: 'text', text: `Pending Revenue: R${pendingRevenue.toFixed(2)}` });
-  content.push({ type: 'spacer' });
-
-  // Class Performance Summary
-  content.push({ type: 'heading', text: 'Class Performance Summary' });
-  const performanceHeaders = ['Class Name', 'Students', 'Revenue', 'Status'];
-  const performanceRows = classes.map(classItem => {
-    const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-    const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-    
-    return [
-      classItem.name.substring(0, 20) + (classItem.name.length > 20 ? '...' : ''),
-      classStudents.length.toString(),
-      `R${classRevenue.toFixed(2)}`,
-      classItem.status || 'active'
-    ];
-  });
-  
-  content.push({ type: 'table', headers: performanceHeaders, rows: performanceRows });
-  content.push({ type: 'spacer' });
-
-  // Revenue Breakdown
-  content.push({ type: 'heading', text: 'Revenue Breakdown' });
-  const activeClasses = classes.filter(c => c.status === 'active');
-  const archivedClasses = classes.filter(c => c.status === 'archived');
-  
-  content.push({ type: 'text', text: `Active Classes: ${activeClasses.length}` });
-  content.push({ type: 'text', text: `Archived Classes: ${archivedClasses.length}` });
-  content.push({ type: 'text', text: `Average Revenue per Student: R${totalStudents > 0 ? (totalRevenue / totalStudents).toFixed(2) : '0.00'}` });
-
-  return content;
-};
-
-const generateRegistrationsContent = () => {
-  const content = [];
-  
-  content.push({ type: 'heading', text: 'Student Registrations Report' });
-  content.push({ type: 'text', text: `Total Approved Registrations: ${approvedRegistrations.length}` });
-  content.push({ type: 'text', text: `Pending Registrations: ${pendingRegistrations.length}` });
-  content.push({ type: 'spacer' });
-
-  // Attendance Summary
-  const presentCount = approvedRegistrations.filter(s => s.attended === true).length;
-  const absentCount = approvedRegistrations.filter(s => s.attended === false).length;
-  const notMarkedCount = approvedRegistrations.filter(s => s.attended === undefined).length;
-  
-  content.push({ type: 'heading', text: 'Attendance Summary' });
-  content.push({ type: 'text', text: `Present: ${presentCount} students` });
-  content.push({ type: 'text', text: `Absent: ${absentCount} students` });
-  content.push({ type: 'text', text: `Not Marked: ${notMarkedCount} students` });
-  content.push({ type: 'spacer' });
-
-  // Detailed Registrations Table
-  content.push({ type: 'heading', text: 'Student Details' });
-  const registrationHeaders = ['Name', 'Email', 'Class', 'Amount Paid', 'Attendance'];
-  const registrationRows = approvedRegistrations.slice(0, 50).map(reg => [ // Limit to first 50 for PDF
-    reg.studentName?.substring(0, 15) + (reg.studentName?.length > 15 ? '...' : '') || 'N/A',
-    reg.studentEmail?.substring(0, 20) + (reg.studentEmail?.length > 20 ? '...' : '') || 'N/A',
-    reg.class?.name?.substring(0, 15) + (reg.class?.name?.length > 15 ? '...' : '') || 'N/A',
-    `R${reg.amountPaid || 0}`,
-    reg.attended === true ? 'Present' : reg.attended === false ? 'Absent' : 'Not Marked'
-  ]);
-  
-  content.push({ type: 'table', headers: registrationHeaders, rows: registrationRows });
-  
-  if (approvedRegistrations.length > 50) {
-    content.push({ type: 'text', text: `... and ${approvedRegistrations.length - 50} more records` });
-  }
-
-  return content;
-};
-
-const generateRevenueContent = () => {
-  const content = [];
-  
-  content.push({ type: 'heading', text: 'Revenue Analysis Report' });
-  content.push({ type: 'text', text: `Total Revenue: R${totalRevenue.toFixed(2)}` });
-  content.push({ type: 'text', text: `Pending Revenue: R${pendingRevenue.toFixed(2)}` });
-  content.push({ type: 'spacer' });
-
-  // Top Performing Classes
-  content.push({ type: 'heading', text: 'Top Performing Classes by Revenue' });
-  const topClasses = classes
-    .map(classItem => {
-      const classRevenue = approvedRegistrations
-        .filter(reg => reg.classId === classItem.id)
-        .reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-      return { ...classItem, revenue: classRevenue };
-    })
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10);
-
-  const revenueHeaders = ['Class Name', 'Students', 'Revenue', 'Status'];
-  const revenueRows = topClasses.map(classItem => {
-    const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-    
-    return [
-      classItem.name.substring(0, 25) + (classItem.name.length > 25 ? '...' : ''),
-      classStudents.length.toString(),
-      `R${classItem.revenue.toFixed(2)}`,
-      classItem.status || 'active'
-    ];
-  });
-  
-  content.push({ type: 'table', headers: revenueHeaders, rows: revenueRows });
-  content.push({ type: 'spacer' });
-
-  // Revenue Distribution
-  content.push({ type: 'heading', text: 'Revenue Distribution' });
-  const activeRevenue = classes
-    .filter(c => c.status === 'active')
-    .reduce((sum, classItem) => {
-      const classRevenue = approvedRegistrations
-        .filter(reg => reg.classId === classItem.id)
-        .reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-      return sum + classRevenue;
-    }, 0);
-
-  const archivedRevenue = classes
-    .filter(c => c.status === 'archived')
-    .reduce((sum, classItem) => {
-      const classRevenue = approvedRegistrations
-        .filter(reg => reg.classId === classItem.id)
-        .reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-      return sum + classRevenue;
-    }, 0);
-
-  content.push({ type: 'text', text: `Active Classes Revenue: R${activeRevenue.toFixed(2)}` });
-  content.push({ type: 'text', text: `Archived Classes Revenue: R${archivedRevenue.toFixed(2)}` });
-
-  return content;
-};
-
-// Bonus: Export All Reports as ZIP
-// const exportAllReports = async () => {
-//   try {
-//     const JSZip = await import('jszip');
-//     const zip = new JSZip();
-    
-//     // Add CSV files
-//     zip.file("registrations.csv", convertRegistrationsToCSV());
-//     zip.file("revenue-report.csv", convertRevenueToCSV());
-//     zip.file("attendance-report.csv", convertAttendanceToCSV());
-    
-//     // Generate and add PDF files (simplified versions)
-//     const { jsPDF } = await import('jspdf');
-    
-//     // Create a simple summary PDF for the ZIP
-//     const summaryPdf = new jsPDF();
-//     summaryPdf.text(`Business Reports Export - ${new Date().toLocaleDateString()}`, 20, 30);
-//     summaryPdf.text(`Total Classes: ${classes.length}`, 20, 50);
-//     summaryPdf.text(`Total Students: ${totalStudents}`, 20, 60);
-//     summaryPdf.text(`Total Revenue: R${totalRevenue.toFixed(2)}`, 20, 70);
-//     zip.file("business-summary.pdf", summaryPdf.output('blob'));
-    
-//     // Create ZIP file and download
-//     const content = await zip.generateAsync({ type: "blob" });
-//     const url = URL.createObjectURL(content);
-//     const link = document.createElement('a');
-//     link.href = url;
-//     link.download = `business-reports-${new Date().toISOString().split('T')[0]}.zip`;
-//     document.body.appendChild(link);
-//     link.click();
-//     document.body.removeChild(link);
-    
-//     showNotification('All reports exported successfully as ZIP file!');
-//   } catch (error) {
-//     console.error('Error generating ZIP:', error);
-//     showNotification('Error exporting all reports', 'error');
-//   }
-// };
   return (
     <div className="dashboard">
       {/* Notification System */}
@@ -921,8 +787,8 @@ const generateRevenueContent = () => {
           </div>
         </section>
 
-        {/* Navigation Tabs */}
-        <div className="tabs-container">
+        {/* Desktop Tabs (Visible on desktop) */}
+        <div className="desktop-tabs">
           <div className="tabs">
             <button 
               className={`tab ${activeTab === 'classes' ? 'active' : ''}`}
@@ -931,16 +797,13 @@ const generateRevenueContent = () => {
               🏢 My Classes ({classes.length})
             </button>
             <button 
-              className={`tab ${activeTab === 'pending' ? 'active' : ''}`}
-              onClick={() => setActiveTab('pending')}
-            >
-              ⏳ Pending ({pendingRegistrations.length})
-            </button>
-            <button 
               className={`tab ${activeTab === 'students' ? 'active' : ''}`}
               onClick={() => setActiveTab('students')}
             >
-              👥 Students ({approvedRegistrations.length})
+              👥 Students ({allRegistrations.length})
+              {pendingRegistrations.length > 0 && (
+                <span className="tab-badge">{pendingRegistrations.length}</span>
+              )}
             </button>
             <button 
               className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
@@ -951,7 +814,7 @@ const generateRevenueContent = () => {
           </div>
         </div>
 
-        {/* Classes Tab */}
+        {/* Main Content */}
         {activeTab === 'classes' && (
           <section className="section">
             <div className="section-header">
@@ -1064,494 +927,389 @@ const generateRevenueContent = () => {
           </section>
         )}
 
-        {/* Pending Registrations Tab */}
-        {activeTab === 'pending' && (
+        {activeTab === 'students' && (
           <section className="section">
             <div className="section-header">
-              <h2>Pending Registrations ({pendingRegistrations.length})</h2>
-              <div className="revenue-badge">
-                Pending Revenue: R{pendingRevenue.toFixed(2)}
+              <h2>All Students</h2>
+              <div className="filters">
+                <select className="form-control form-control-sm" style={{width: '200px'}}>
+                  <option value="all">All Classes</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <select className="form-control form-control-sm" style={{width: '150px'}}>
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
               </div>
             </div>
 
-            {pendingRegistrations.length === 0 ? (
+            {allRegistrations.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">✅</div>
-                <h3>No pending registrations</h3>
-                <p>All registrations have been processed.</p>
+                <div className="empty-icon">👥</div>
+                <h3>No students yet</h3>
+                <p>Students will appear here when they register for your classes.</p>
               </div>
             ) : (
-              // <div className="registrations-list">
-                <div className="cards-grid">
-
-                {pendingRegistrations.map(reg => (
-                  <div key={reg.id} className="card">
-                    <div className="card-header">
-                      <h3>{reg.studentName}</h3>
-                      <span className="status-badge status-pending">Pending Review</span>
-                    </div>
-                    
-                    <div className="card-content">
-                      <div className="info-grid">
-                        <div className="info-item">
-                          <span className="label">Email:</span>
-                          <span className="value">{reg.studentEmail}</span>
-                        </div>
-                        <div className="info-item">
-                          <span className="label">Phone:</span>
-                          <span className="value">{reg.studentPhone}</span>
-                        </div>
-                        <div className="info-item">
-                          <span className="label">Class:</span>
-                          <span className="value">{reg.class?.name}</span>
-                        </div>
-                        <div className="info-item">
-                          <span className="label">Amount Paid:</span>
-                          <span className="value">R{reg.amountPaid}</span>
-                        </div>
-                        <div className="info-item">
-                          <span className="label">Payment Date:</span>
-                          <span className="value">{reg.paymentDate}</span>
-                        </div>
-                        {reg.transactionId && (
-                          <div className="info-item">
-                            <span className="label">Transaction ID:</span>
-                            <span className="value code">{reg.transactionId}</span>
-                          </div>
-                        )}
-                      </div>
+              <div className="table-container">
+                <table className="students-table">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Class</th>
+                      <th>Payment</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allRegistrations.map(student => {
+                      const isPending = student.status === 'pending';
+                      const isRejected = student.status === 'rejected';
                       
-                      {reg.popBase64 && (
-                        <div className="pop-section">
-                          <button 
-                            onClick={() => handleViewPop(reg.popBase64, reg.popFileName)}
-                            className="btn btn-outline btn-sm"
-                          >
-                            📎 View Proof of Payment
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="card-actions">
-                      <button 
-                        onClick={() => handleApproveRegistration(reg.id)}
-                        className="btn btn-success"
-                      >
-                        ✅ Approve
-                      </button>
-                      <button 
-                        onClick={() => handleRejectRegistration(reg.id)}
-                        className="btn btn-danger"
-                      >
-                        ❌ Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                      return (
+                        <tr key={student.id} className={isPending ? 'pending-row' : isRejected ? 'rejected-row' : 'approved-row'}>
+                          <td>
+                            <div className="student-info">
+                              <div className="student-name">{student.studentName}</div>
+                              <div className="student-email">{student.studentEmail}</div>
+                              <div className="student-phone">{student.studentPhone}</div>
+                            </div>
+                          </td>
+                          <td>{student.class?.name || 'Unknown Class'}</td>
+                          <td>
+                            <div>R{student.amountPaid || 0}</div>
+                            <div className="payment-date">{student.paymentDate}</div>
+                          </td>
+                          <td>
+                            <span className={`status-badge status-${student.status}`}>
+                              {student.status}
+                            </span>
+                          </td>
+                          <td>
+                            {isPending ? (
+                              <button 
+                                className="btn btn-warning btn-sm"
+                                onClick={() => handleViewStudentDetails(student)}
+                              >
+                                Review
+                              </button>
+                            ) : (
+                              <span className="text-muted">Reviewed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
         )}
 
-        {/* Students Tab */}
-       {/* Students Tab */}
-{activeTab === 'students' && (
-  <section className="section">
-    <div className="section-header">
-      <h2>Student Management</h2>
-     
-    </div>
-
-   {/* Class Selection Screen */}
-{!selectedClass && (
-  <div className="class-selection-section">
-    <div className="selection-header">
-      <h3>Select a Class</h3>
-      <p>Choose a class to view and manage students</p>
-      <div className="revenue-badge">
-        Total Platform Revenue: R{totalRevenue.toFixed(2)}
-      </div>
-    </div>
-    
-    <div className="classes-grid">
-      {classes.map(classItem => {
-        const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-        const presentCount = classStudents.filter(s => s.attended === true).length;
-        const absentCount = classStudents.filter(s => s.attended === false).length;
-        const pendingCount = classStudents.filter(s => s.attended === undefined).length;
-        const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-        
-        return (
-          <div 
-            key={classItem.id} 
-            className="class-selection-card"
-            onClick={() => setSelectedClass(classItem)}
-          >
-            <div className="class-card-header">
-              <h4>{classItem.name}</h4>
-              <span className="student-count">
-                {classStudents.length} students
-              </span>
-            </div>
-            
-            <div className="class-card-details">
-              <div className="class-info">
-                <span className="info-item">
-                  <span className="icon">📅</span>
-                  {classItem.startDate ? new Date(classItem.startDate).toLocaleDateString() : 'TBA'}
-                </span>
-                <span className="info-item">
-                  <span className="icon">📍</span>
-                  {classItem.venue || 'TBA'}
-                </span>
-                <span className="info-item revenue">
-                  <span className="icon">💰</span>
-                  R{classRevenue.toFixed(2)}
-                </span>
+        {activeTab === 'reports' && (
+          <section className="section">
+            <div className="section-header">
+              <h2>Reports & Analytics</h2>
+              <div className="revenue-badge">
+                Total Revenue: R{totalRevenue.toFixed(2)}
               </div>
-              <div className="attendance-overview">
-                <div className="attendance-stats">
-                  <span className="stat present">✅ {presentCount}</span>
-                  <span className="stat absent">❌ {absentCount}</span>
-                  <span className="stat pending">⏳ {pendingCount}</span>
+            </div>
+
+            {/* Report Cards */}
+            <div className="report-cards-grid">
+              <div className="report-card">
+                <h3>📊 Business Summary</h3>
+                <div className="report-metrics">
+                  <div className="metric-row">
+                    <span className="metric-label">Total Classes</span>
+                    <span className="metric-value">{classes.length}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Active Classes</span>
+                    <span className="metric-value">{classes.filter(c => c.status === 'active').length}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Total Students</span>
+                    <span className="metric-value">{totalStudents}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Pending Approvals</span>
+                    <span className="metric-value">{pendingRegistrations.length}</span>
+                  </div>
                 </div>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => exportToPDF('summary')}
+                  disabled={exportingPDF}
+                >
+                  {exportingPDF ? 'Generating...' : '📥 Download Summary PDF'}
+                </button>
               </div>
-            </div>
-            
-            <div className="class-card-footer">
-              <div className="class-price">R{classItem.price}</div>
-              <button className="view-students-btn">
-                Manage Students →
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
 
-    {/* Student Management Screen */}
-    {selectedClass && (
-      <ClassStudentManagement 
-        class={selectedClass}
-        students={approvedRegistrations.filter(reg => reg.classId === selectedClass.id)}
-        onBack={() => setSelectedClass(null)}
-        onUpdateAttendance={fetchRegistrations} // Refresh data after changes
-      />
-    )}
-  </section>
-)}
-
-     {/* Reports Tab */}
-{activeTab === 'reports' && (
-  <section className="section">
-    <div className="section-header">
-      <h2>Business Reports & Analytics</h2>
-      <div className="revenue-badge">
-        Total Revenue: R{totalRevenue.toFixed(2)}
-      </div>
-    </div>
-
-    {/* Key Metrics Overview */}
-    <div className="metrics-grid">
-      <div className="metric-card">
-        <div className="metric-icon">📊</div>
-        <div className="metric-content">
-          <div className="metric-value">{classes.length}</div>
-          <div className="metric-label">Total Classes</div>
-          <div className="metric-trend">
-            {classes.filter(c => c.status === 'active').length} active
-          </div>
-        </div>
-      </div>
-      
-      <div className="metric-card">
-        <div className="metric-icon">👥</div>
-        <div className="metric-content">
-          <div className="metric-value">{totalStudents}</div>
-          <div className="metric-label">Total Students</div>
-          <div className="metric-trend">
-            {approvedRegistrations.filter(r => r.attended === true).length} attended
-          </div>
-        </div>
-      </div>
-      
-      <div className="metric-card">
-        <div className="metric-icon">💰</div>
-        <div className="metric-content">
-          <div className="metric-value">R{totalRevenue.toFixed(2)}</div>
-          <div className="metric-label">Total Revenue</div>
-          <div className="metric-trend">
-            R{pendingRevenue.toFixed(2)} pending
-          </div>
-        </div>
-      </div>
-      
-      <div className="metric-card">
-        <div className="metric-icon">📈</div>
-        <div className="metric-content">
-          <div className="metric-value">
-            {classes.length > 0 ? (totalStudents / classes.length).toFixed(1) : 0}
-          </div>
-          <div className="metric-label">Avg Students/Class</div>
-          <div className="metric-trend">
-            {classes.length > 0 ? ((totalStudents / classes.length) * 100).toFixed(1) : 0}% capacity
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Class Performance Report */}
-    <div className="report-section">
-      <h3>🎓 Class Performance</h3>
-      <div className="table-container">
-        <table className="report-table">
-          <thead>
-            <tr>
-              <th>Class Name</th>
-              <th>Status</th>
-              <th>Students</th>
-              <th>Revenue</th>
-              <th>Attendance Rate</th>
-              <th>Capacity Usage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {classes.map(classItem => {
-              const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-              const presentCount = classStudents.filter(s => s.attended === true).length;
-              const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-              const attendanceRate = classStudents.length > 0 
-                ? ((presentCount / classStudents.length) * 100).toFixed(1) 
-                : 0;
-              const capacityUsage = classItem.capacity 
-                ? ((classStudents.length / classItem.capacity) * 100).toFixed(1)
-                : classStudents.length > 0 ? '100+' : 0;
-
-              return (
-                <tr key={classItem.id}>
-                  <td className="class-name">{classItem.name}</td>
-                  <td>
-                    <span className={`status-badge status-${classItem.status || 'active'}`}>
-                      {classItem.status || 'active'}
+              <div className="report-card">
+                <h3>👥 Student Registrations</h3>
+                <div className="report-metrics">
+                  <div className="metric-row">
+                    <span className="metric-label">Total Registrations</span>
+                    <span className="metric-value">{allRegistrations.length}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Approved</span>
+                    <span className="metric-value">{approvedRegistrations.length}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Pending</span>
+                    <span className="metric-value">{pendingRegistrations.length}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Approval Rate</span>
+                    <span className="metric-value">
+                      {allRegistrations.length > 0 
+                        ? `${((approvedRegistrations.length / allRegistrations.length) * 100).toFixed(1)}%`
+                        : '0%'}
                     </span>
-                  </td>
-                  <td>{classStudents.length}</td>
-                  <td>R{classRevenue.toFixed(2)}</td>
-                  <td>
-                    <div className="attendance-bar">
-                      <div 
-                        className="attendance-fill"
-                        style={{ width: `${attendanceRate}%` }}
-                      ></div>
-                      <span>{attendanceRate}%</span>
-                    </div>
-                  </td>
-                  <td>
-                    {classItem.capacity ? (
-                      <div className="capacity-usage">
-                        {classStudents.length}/{classItem.capacity} ({capacityUsage}%)
-                      </div>
-                    ) : (
-                      <div className="capacity-usage">Unlimited</div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => exportToPDF('registrations')}
+                  disabled={exportingPDF}
+                >
+                  {exportingPDF ? 'Generating...' : '📥 Download Registrations PDF'}
+                </button>
+              </div>
 
-    {/* Revenue Analysis */}
-    <div className="report-section">
-      <h3>💰 Revenue Analysis</h3>
-      <div className="revenue-breakdown">
-        <div className="revenue-card">
-          <h4>Total Revenue</h4>
-          <div className="revenue-amount">R{totalRevenue.toFixed(2)}</div>
-          <div className="revenue-detail">
-            From {approvedRegistrations.length} approved registrations
-          </div>
-        </div>
-        
-        <div className="revenue-card">
-          <h4>Pending Revenue</h4>
-          <div className="revenue-amount pending">R{pendingRevenue.toFixed(2)}</div>
-          <div className="revenue-detail">
-            From {pendingRegistrations.length} pending registrations
-          </div>
-        </div>
-        
-        <div className="revenue-card">
-          <h4>Average Payment</h4>
-          <div className="revenue-amount">
-            R{approvedRegistrations.length > 0 
-              ? (totalRevenue / approvedRegistrations.length).toFixed(2) 
-              : '0.00'}
-          </div>
-          <div className="revenue-detail">
-            Per student registration
-          </div>
-        </div>
-      </div>
+              <div className="report-card">
+                <h3>💰 Revenue Analysis</h3>
+                <div className="report-metrics">
+                  <div className="metric-row">
+                    <span className="metric-label">Total Revenue</span>
+                    <span className="metric-value">R{totalRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Pending Revenue</span>
+                    <span className="metric-value">R{pendingRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Average Payment</span>
+                    <span className="metric-value">
+                      R{approvedRegistrations.length > 0 
+                        ? (totalRevenue / approvedRegistrations.length).toFixed(2) 
+                        : '0.00'}
+                    </span>
+                  </div>
+                  <div className="metric-row">
+                    <span className="metric-label">Transactions</span>
+                    <span className="metric-value">{approvedRegistrations.length}</span>
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => exportToPDF('revenue')}
+                  disabled={exportingPDF}
+                >
+                  {exportingPDF ? 'Generating...' : '📥 Download Revenue PDF'}
+                </button>
+              </div>
+            </div>
 
-      {/* Top Performing Classes by Revenue */}
-      <div className="top-classes">
-        <h4>Top Performing Classes by Revenue</h4>
-        {classes
-          .map(classItem => {
-            const classRevenue = approvedRegistrations
-              .filter(reg => reg.classId === classItem.id)
-              .reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-            return { ...classItem, revenue: classRevenue };
-          })
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 5)
-          .map((classItem, index) => (
-            <div key={classItem.id} className="top-class-item">
-              <div className="class-rank">#{index + 1}</div>
-              <div className="class-info">
-                <div className="class-name">{classItem.name}</div>
-                <div className="class-stats">
-                  {approvedRegistrations.filter(reg => reg.classId === classItem.id).length} students
+            {/* Detailed Reports Section */}
+            <div className="detailed-reports">
+              <h3>Detailed Reports</h3>
+              
+              {/* Class Performance Table */}
+              <div className="report-section">
+                <h4>🎓 Class Performance</h4>
+                <div className="table-container">
+                  <table className="report-table">
+                    <thead>
+                      <tr>
+                        <th>Class Name</th>
+                        <th>Status</th>
+                        <th>Students</th>
+                        <th>Revenue</th>
+                        <th>Average/Student</th>
+                        <th>Attendance Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classes.map(classItem => {
+                        const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
+                        const presentCount = classStudents.filter(s => s.attended === true).length;
+                        const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
+                        const avgRevenue = classStudents.length > 0 ? classRevenue / classStudents.length : 0;
+                        const attendanceRate = classStudents.length > 0 
+                          ? ((presentCount / classStudents.length) * 100).toFixed(1) 
+                          : 0;
+
+                        return (
+                          <tr key={classItem.id}>
+                            <td className="class-name">{classItem.name}</td>
+                            <td>
+                              <span className={`status-badge status-${classItem.status || 'active'}`}>
+                                {classItem.status || 'active'}
+                              </span>
+                            </td>
+                            <td>{classStudents.length}</td>
+                            <td>R{classRevenue.toFixed(2)}</td>
+                            <td>R{avgRevenue.toFixed(2)}</td>
+                            <td>
+                              <div className="attendance-bar">
+                                <div 
+                                  className="attendance-fill"
+                                  style={{ width: `${attendanceRate}%` }}
+                                ></div>
+                                <span>{attendanceRate}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              <div className="class-revenue">R{classItem.revenue.toFixed(2)}</div>
-            </div>
-          ))
-        }
-      </div>
-    </div>
 
-    {/* Student Analytics */}
-    <div className="report-section">
-      <h3>📊 Student Analytics</h3>
-      <div className="student-stats-grid">
-        <div className="student-stat-card">
-          <h4>Attendance Overview</h4>
-          <div className="attendance-stats">
-            <div className="attendance-item">
-              <span className="attendance-label present">Present</span>
-              <span className="attendance-count">
-                {approvedRegistrations.filter(s => s.attended === true).length}
-              </span>
+              {/* Quick Export All Button */}
+              <div className="export-all-section">
+                <button 
+                  className="btn btn-primary btn-lg"
+                  onClick={async () => {
+                    setExportingPDF(true);
+                    await exportToPDF('summary');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await exportToPDF('registrations');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await exportToPDF('revenue');
+                    setExportingPDF(false);
+                    showNotification('All reports exported successfully!');
+                  }}
+                  disabled={exportingPDF}
+                >
+                  {exportingPDF ? 'Exporting All Reports...' : '🚀 Export All PDF Reports'}
+                </button>
+                <p className="export-note">
+                  This will generate and download three separate PDF reports: Summary, Registrations, and Revenue Analysis.
+                </p>
+              </div>
             </div>
-            <div className="attendance-item">
-              <span className="attendance-label absent">Absent</span>
-              <span className="attendance-count">
-                {approvedRegistrations.filter(s => s.attended === false).length}
-              </span>
-            </div>
-            <div className="attendance-item">
-              <span className="attendance-label pending">Not Marked</span>
-              <span className="attendance-count">
-                {approvedRegistrations.filter(s => s.attended === undefined).length}
-              </span>
-            </div>
-          </div>
+          </section>
+        )}
+
+        {/* Mobile Bottom Tabs */}
+        <div className="mobile-bottom-tabs">
+          <button 
+            className={`tab ${activeTab === 'classes' ? 'active' : ''}`}
+            onClick={() => setActiveTab('classes')}
+          >
+            <span className="tab-icon">🏢</span>
+            <span className="tab-label">Classes</span>
+          </button>
+          <button 
+            className={`tab ${activeTab === 'students' ? 'active' : ''}`}
+            onClick={() => setActiveTab('students')}
+          >
+            <span className="tab-icon">👥</span>
+            <span className="tab-label">Students</span>
+            {pendingRegistrations.length > 0 && (
+              <span className="tab-badge">{pendingRegistrations.length}</span>
+            )}
+          </button>
+          <button 
+            className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
+            onClick={() => setActiveTab('reports')}
+          >
+            <span className="tab-icon">📊</span>
+            <span className="tab-label">Reports</span>
+          </button>
         </div>
 
-        <div className="student-stat-card">
-          <h4>Registration Timeline</h4>
-          <div className="timeline-stats">
-            {/* Last 7 days registrations */}
-            {(() => {
-              const last7Days = [];
-              for (let i = 6; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateStr = date.toISOString().split('T')[0];
-                const dayRegistrations = approvedRegistrations.filter(reg => 
-                  reg.paymentDate === dateStr
-                ).length;
-                last7Days.push({ date: dateStr, count: dayRegistrations });
-              }
-              return last7Days.map(day => (
-                <div key={day.date} className="timeline-item">
-                  <span className="timeline-date">
-                    {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                  </span>
-                  <span className="timeline-count">{day.count}</span>
+        {/* Student Review Modal */}
+        {showStudentReviewModal && selectedStudent && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Review Student Registration</h2>
+                <button 
+                  className="close-btn"
+                  onClick={() => {
+                    setShowStudentReviewModal(false);
+                    setSelectedStudent(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="modal-body">
+                <div className="student-details">
+                  <h3>{selectedStudent.studentName}</h3>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span className="label">Email:</span>
+                      <span className="value">{selectedStudent.studentEmail}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Phone:</span>
+                      <span className="value">{selectedStudent.studentPhone}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Class:</span>
+                      <span className="value">{selectedStudent.class?.name}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Amount Paid:</span>
+                      <span className="value">R{selectedStudent.amountPaid}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Payment Date:</span>
+                      <span className="value">{selectedStudent.paymentDate}</span>
+                    </div>
+                    {selectedStudent.transactionId && (
+                      <div className="info-item">
+                        <span className="label">Transaction ID:</span>
+                        <span className="value code">{selectedStudent.transactionId}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ));
-            })()}
+
+                {selectedStudent.popBase64 && (
+                  <div className="pop-section">
+                    <h4>Proof of Payment</h4>
+                    <button 
+                      onClick={() => handleViewPop(selectedStudent.popBase64, selectedStudent.popFileName)}
+                      className="btn btn-outline"
+                    >
+                      📎 View Proof of Payment
+                    </button>
+                  </div>
+                )}
+
+                <div className="modal-actions">
+                  <button 
+                    onClick={() => handleApproveRegistration(selectedStudent.id)}
+                    className="btn btn-success"
+                  >
+                    ✅ Approve Registration
+                  </button>
+                  <button 
+                    onClick={() => handleRejectRegistration(selectedStudent.id)}
+                    className="btn btn-danger"
+                  >
+                    ❌ Reject Registration
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        )}
 
-    {/* Export Options */}
-  <div className="report-section">
-  <h3>📤 Export Reports</h3>
-  <div className="export-options">
-    {/* CSV Export Buttons */}
-    <div className="export-group">
-      <h4>CSV Export</h4>
-      <div className="export-buttons">
-        <button 
-          className="btn btn-outline"
-          onClick={() => exportToCSV('registrations')}
-        >
-          📥 Export Registrations CSV
-        </button>
-        <button 
-          className="btn btn-outline"
-          onClick={() => exportToCSV('revenue')}
-        >
-          📥 Export Revenue Report CSV
-        </button>
-        <button 
-          className="btn btn-outline"
-          onClick={() => exportToCSV('attendance')}
-        >
-          📥 Export Attendance Report CSV
-        </button>
-      </div>
-    </div>
-
-    {/* PDF Export Buttons */}
-    <div className="export-group">
-      <h4>PDF Export</h4>
-      <div className="export-buttons">
-        <button 
-          className="btn btn-outline btn-pdf"
-          onClick={() => exportToPDF('summary')}
-        >
-          📄 Export Summary PDF
-        </button>
-        <button 
-          className="btn btn-outline btn-pdf"
-          onClick={() => exportToPDF('registrations')}
-        >
-          📄 Export Registrations PDF
-        </button>
-        <button 
-          className="btn btn-outline btn-pdf"
-          onClick={() => exportToPDF('revenue')}
-        >
-          📄 Export Revenue PDF
-        </button>
-      </div>
-    </div>
-
-    {/* Quick Export All */}
-    {/* <div className="export-group">
-      <h4>Quick Export</h4>
-      <button 
-        className="btn btn-primary"
-        onClick={exportAllReports}
-      >
-        🚀 Export All Reports (ZIP)
-      </button>
-    </div> */}
-  </div>
-</div>
-  </section>
-)}
         {/* Create/Edit Class Modal */}
         {(showCreateClass || showEditClass) && (
           <div className="modal-overlay">
@@ -1663,6 +1421,7 @@ const generateRevenueContent = () => {
                     onChange={(e) => setClassForm({...classForm, schedule: e.target.value})}
                   />
                 </div>
+                
                 <div className="form-group">
                   <label className="form-label">Venue/Location *</label>
                   <input
@@ -1675,6 +1434,7 @@ const generateRevenueContent = () => {
                   />
                   <p className="form-hint">This will be used in the registration URL</p>
                 </div>
+                
                 <div className="form-group">
                   <label className="form-label">Payment Instructions *</label>
                   <textarea

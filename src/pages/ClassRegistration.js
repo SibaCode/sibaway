@@ -12,16 +12,24 @@ function ClassRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  const [referenceNumber, setReferenceNumber] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     phone: '',
-    paymentDate: ''
   });
   const [popImage, setPopImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [paymentAmount, setPaymentAmount] = useState('');
+
+  // Generate a unique reference number
+  const generateReferenceNumber = () => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+    const classCode = classData?.name?.substring(0, 3).toUpperCase() || 'CLS';
+    return `REF-${classCode}-${timestamp}-${random}`;
+  };
 
   const fetchClassData = React.useCallback(async () => {
     try {
@@ -52,6 +60,9 @@ function ClassRegistration() {
           price: parseFloat(classDoc.data().price) || 0
         };
         setClassData(classData);
+        
+        // Set initial payment amount to class price
+        setPaymentAmount(classData.price.toString());
         
         if (classData.organizationId) {
           try {
@@ -94,7 +105,6 @@ function ClassRegistration() {
     fetchClassData();
   }, [fetchClassData]);
 
-  // Simple image compression for mobile
   const compressImage = (file, maxWidth = 800, quality = 0.7) => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
@@ -105,7 +115,6 @@ function ClassRegistration() {
         let width = img.width;
         let height = img.height;
 
-        // Calculate new dimensions to maintain aspect ratio
         if (width > maxWidth) {
           height = (height * maxWidth) / width;
           width = maxWidth;
@@ -114,10 +123,8 @@ function ClassRegistration() {
         canvas.width = width;
         canvas.height = height;
 
-        // Draw and compress
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to blob with reduced quality
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -149,13 +156,20 @@ function ClassRegistration() {
     const errors = {};
     
     if (!formData.name.trim()) errors.name = 'Please enter your full name';
-    if (!formData.email.trim()) {
-      errors.email = 'Please enter your email';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
     if (!formData.phone.trim()) errors.phone = 'Please enter your phone number';
-    if (!formData.paymentDate) errors.paymentDate = 'Please select payment date';
+    
+    // Validate payment amount
+    if (!paymentAmount.trim()) {
+      errors.paymentAmount = 'Please enter the amount paid';
+    } else {
+      const amount = parseFloat(paymentAmount);
+      if (isNaN(amount) || amount < 0) {
+        errors.paymentAmount = 'Please enter a valid amount';
+      } else if (classData && amount < classData.price) {
+        errors.paymentAmount = `Payment amount must be at least R${classData.price}`;
+      }
+    }
+    
     if (!popImage) errors.popImage = 'Please upload proof of payment';
     
     setFormErrors(errors);
@@ -165,7 +179,6 @@ function ClassRegistration() {
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check file size (4MB limit)
       const maxSize = 4 * 1024 * 1024;
       if (file.size > maxSize) {
         setFormErrors({ popImage: 'File is too large. Please select an image under 4MB.' });
@@ -181,10 +194,8 @@ function ClassRegistration() {
       setFormErrors(prev => ({ ...prev, popImage: '' }));
       
       try {
-        // Create preview without compression first
         const base64 = await convertToBase64(file);
         setImagePreview(base64);
-        console.log('Preview created, original file size:', file.size);
       } catch (error) {
         console.error('Error creating preview:', error);
         setFormErrors({ popImage: 'Error loading image preview. Please try a different image.' });
@@ -203,25 +214,21 @@ function ClassRegistration() {
     setError(null);
 
     try {
-      console.log('Starting registration with POP upload...');
+      // Generate reference number
+      const refNumber = generateReferenceNumber();
+      setReferenceNumber(refNumber);
       
       let processedImage = popImage;
       let popBase64;
 
-      // Compress image for submission (especially important for mobile)
       try {
-        console.log('Compressing image for submission...');
-        processedImage = await compressImage(popImage, 600, 0.6); // More aggressive compression
-        console.log('Image compressed, new size:', processedImage.size);
+        processedImage = await compressImage(popImage, 600, 0.6);
       } catch (compressError) {
         console.warn('Compression failed, using original image:', compressError);
-        // Continue with original image
       }
 
-      // Convert to base64
       try {
         popBase64 = await convertToBase64(processedImage);
-        console.log('Image converted to base64, length:', popBase64.length);
       } catch (convertError) {
         console.error('Base64 conversion failed:', convertError);
         throw new Error('IMAGE_CONVERSION_FAILED');
@@ -229,21 +236,22 @@ function ClassRegistration() {
 
       const studentId = uuidv4();
 
-      // Create registration data
+      // Create registration data with reference number and payment date
       const registrationData = {
         classId: classData.id,
         studentId: studentId,
         studentName: formData.name.trim(),
-        studentEmail: formData.email.trim(),
         studentPhone: formData.phone.trim(),
-        paymentDate: formData.paymentDate,
-        amountPaid: classData.price,
+        paymentAmount: parseFloat(paymentAmount),
+        amountPaid: parseFloat(paymentAmount),
         popBase64: popBase64,
         popFileName: popImage.name,
         popFileType: processedImage.type,
         popFileSize: processedImage.size,
+        referenceNumber: refNumber,
         status: 'pending',
         registeredAt: new Date(),
+        paymentDate: new Date(), // Payment date sent to DB but not shown to customer
         organizationId: classData.organizationId || '',
         businessName: businessData?.name || 'SkillShare',
         adminEmail: businessData?.email || 'mvubusiba@gmail.com',
@@ -255,10 +263,8 @@ function ClassRegistration() {
         dateSlug: date
       };
 
-      console.log('Submitting to Firestore...');
-      
       const docRef = await addDoc(collection(db, 'registrations'), registrationData);
-      console.log('Registration successful! Document ID:', docRef.id);
+      console.log('Registration successful! Document ID:', docRef.id, 'Reference:', refNumber);
 
       setSubmitted(true);
 
@@ -304,10 +310,6 @@ function ClassRegistration() {
     setLoading(true);
     setError(null);
     fetchClassData();
-  };
-
-  const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
   };
 
   if (loading) {
@@ -362,7 +364,19 @@ function ClassRegistration() {
             <h1>Registration Complete!</h1>
             <p className="success-subtitle">Thank you for registering for {classData.name}</p>
             
+            <div className="reference-section">
+              <div className="reference-header">
+                <span className="reference-icon">📋</span>
+                <h3>Your Reference Number</h3>
+              </div>
+              <div className="reference-number">{referenceNumber}</div>
+              <p className="reference-note">
+                Please save this reference number for future communications.
+              </p>
+            </div>
+            
             <div className="success-summary">
+              <h4>Registration Details</h4>
               <div className="summary-item">
                 <strong>Student:</strong> {formData.name}
               </div>
@@ -370,22 +384,37 @@ function ClassRegistration() {
                 <strong>Class:</strong> {classData.name}
               </div>
               <div className="summary-item">
-                <strong>Amount Paid:</strong> R{classData.price}
+                <strong>Class Date:</strong> {classData.startDate ? formatDate(classData.startDate) : 'To be announced'}
+              </div>
+              <div className="summary-item">
+                <strong>Amount Paid:</strong> R{paymentAmount}
+              </div>
+              <div className="summary-item">
+                <strong>Phone:</strong> {formData.phone}
               </div>
             </div>
 
             <div className="next-steps">
-              <h3>What happens next?</h3>
+              <h4>What happens next?</h4>
               <ul>
-                <li>We'll review your payment and proof within 24 hours</li>
-                <li>You'll receive a confirmation email</li>
-                <li>Keep your payment receipt safe</li>
+                <li>Your registration is now <strong>pending verification</strong></li>
+                <li>We will verify your payment proof within 24-48 hours</li>
+                <li>You will receive a confirmation SMS once verified</li>
+                <li>Keep your reference number for any inquiries</li>
               </ul>
             </div>
 
             <div className="contact-info">
-              <p><strong>Questions?</strong> Email {businessData?.adminName} at {businessData?.email}</p>
+              <p><strong>Questions?</strong> Contact {businessData?.adminName} at {businessData?.email}</p>
+              <p className="reference-display">Reference: <strong>{referenceNumber}</strong></p>
             </div>
+            
+            <button 
+              onClick={() => window.print()} 
+              className="btn btn-secondary print-btn"
+            >
+              Print this page
+            </button>
           </div>
         </div>
       </div>
@@ -399,7 +428,7 @@ function ClassRegistration() {
         <div className="registration-header">
           <div className="header-content">
             <h6 className="business-name-test">{businessData?.name}</h6>
-            <p>Complete your registration in 2 minutes</p>
+            <p>Complete your registration</p>
           </div>
         </div>
 
@@ -425,6 +454,7 @@ function ClassRegistration() {
                 <div className="value">{classData.venue || 'To be announced'}</div>
               </div>
             </div>
+           
           </div>
         </div>
 
@@ -463,22 +493,6 @@ function ClassRegistration() {
             </div>
 
             <div className="form-group">
-              <label>Email Address *</label>
-              <input
-                type="email"
-                placeholder="your.email@example.com"
-                value={formData.email}
-                onChange={(e) => {
-                  setFormData({...formData, email: e.target.value});
-                  setFormErrors(prev => ({...prev, email: ''}));
-                }}
-                className={formErrors.email ? 'error' : ''}
-                disabled={submitting}
-              />
-              {formErrors.email && <div className="error-message">{formErrors.email}</div>}
-            </div>
-
-            <div className="form-group">
               <label>Phone Number *</label>
               <input
                 type="tel"
@@ -495,19 +509,28 @@ function ClassRegistration() {
             </div>
 
             <div className="form-group">
-              <label>Payment Date *</label>
-              <input
-                type="date"
-                value={formData.paymentDate}
-                onChange={(e) => {
-                  setFormData({...formData, paymentDate: e.target.value});
-                  setFormErrors(prev => ({...prev, paymentDate: ''}));
-                }}
-                className={formErrors.paymentDate ? 'error' : ''}
-                disabled={submitting}
-                max={getTodayDate()}
-              />
-              {formErrors.paymentDate && <div className="error-message">{formErrors.paymentDate}</div>}
+              <label>Amount Paid *</label>
+              <div className="amount-input-container">
+                <span className="currency-prefix">R</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={classData.price}
+                  placeholder="Enter amount paid"
+                  value={paymentAmount}
+                  onChange={(e) => {
+                    setPaymentAmount(e.target.value);
+                    setFormErrors(prev => ({...prev, paymentAmount: ''}));
+                  }}
+                  className={formErrors.paymentAmount ? 'error' : ''}
+                  disabled={submitting}
+                />
+              </div>
+              {formErrors.paymentAmount && <div className="error-message">{formErrors.paymentAmount}</div>}
+              <div className="amount-note">
+                <span className="info-icon">ℹ️</span>
+                <span>Minimum payment: R{classData.price}</span>
+              </div>
             </div>
 
             <div className="form-group">
@@ -516,9 +539,9 @@ function ClassRegistration() {
                 <div className={`file-upload ${formErrors.popImage ? 'error' : ''} ${submitting ? 'disabled' : ''}`}>
                   <div className="upload-icon">📎</div>
                   <div className="upload-text">
-                    <div className="upload-title">
+                    {/* <div className="upload-title">
                       {popImage ? `Selected: ${popImage.name}` : 'Upload payment proof'}
-                    </div>
+                    </div> */}
                     <div className="upload-subtitle">
                       {popImage ? 'Click to change file' : 'Click to select an image file (Max 4MB)'}
                     </div>
@@ -552,14 +575,11 @@ function ClassRegistration() {
               </div>
             </div>
 
-            <div className="payment-info">
-              <div className="payment-header">
-                <span className="icon">💳</span>
-                <span>Payment Amount: R{classData.price}</span>
+            <div className="reference-info">
+              <div className="info-box">
+                <span className="info-icon">ℹ️</span>
+                <span>A unique reference number will be generated upon submission.</span>
               </div>
-              <p className="payment-instructions">
-                {classData.paymentInstructions || 'Please make payment and upload proof above.'}
-              </p>
             </div>
 
             <button 
