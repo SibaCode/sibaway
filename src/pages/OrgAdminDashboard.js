@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { v4 as uuidv4 } from 'uuid';
+import './css/OrgAdminDashboard.css';
+
 
 function OrgAdminDashboard() {
   const { userData, logout } = useAuth();
@@ -25,7 +27,7 @@ function OrgAdminDashboard() {
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [showStudentReviewModal, setShowStudentReviewModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [exportingPDF, setExportingPDF] = useState(false);
+  // const [exportingPDF, setExportingPDF] = useState(false);
 
   // Form states
   const [classForm, setClassForm] = useState({
@@ -103,7 +105,6 @@ function OrgAdminDashboard() {
     
     const pending = allRegistrations.filter(reg => reg.status === 'pending');
     const approved = allRegistrations.filter(reg => reg.status === 'approved');
-    // const rejected = allRegistrations.filter(reg => reg.status === 'rejected');
     
     setPendingRegistrations(pending);
     setApprovedRegistrations(approved);
@@ -425,310 +426,42 @@ function OrgAdminDashboard() {
     showNotification(message);
   };
 
-  // PDF Export Functions
-  const exportToPDF = async (type) => {
-    try {
-      setExportingPDF(true);
+  // Group students by class for reports
+  // const getStudentsByClass = () => {
+  //   const allRegistrations = [...pendingRegistrations, ...approvedRegistrations];
+  //   const groupedByClass = {};
+    
+  //   allRegistrations.forEach(student => {
+  //     const classId = student.classId;
+  //     if (!groupedByClass[classId]) {
+  //       groupedByClass[classId] = {
+  //         class: student.class || { name: 'Unknown Class' },
+  //         students: [],
+  //         pending: 0,
+  //         approved: 0,
+  //         revenue: 0
+  //       };
+  //     }
       
-      // Dynamically import jsPDF
-      const { jsPDF } = await import('jspdf');
+  //     groupedByClass[classId].students.push(student);
       
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let yPosition = 20;
-      
-      // Add header
-      pdf.setFontSize(20);
-      pdf.setTextColor(44, 62, 80);
-      pdf.text(`${userData?.organizationName || 'Business'} - ${type.charAt(0).toUpperCase() + type.slice(1)} Report`, 20, yPosition);
-      
-      pdf.setFontSize(12);
-      pdf.setTextColor(128, 128, 128);
-      pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, yPosition + 10);
-      
-      yPosition += 25;
-      
-      // Add content based on type
-      switch (type) {
-        case 'summary':
-          generateSummaryPDF(pdf, yPosition);
-          break;
-        case 'registrations':
-          generateRegistrationsPDF(pdf, yPosition);
-          break;
-        case 'revenue':
-          generateRevenuePDF(pdf, yPosition);
-          break;
-        default:
-          break;
-      }
-      
-      // Save PDF
-      pdf.save(`${type}-report-${new Date().toISOString().split('T')[0]}.pdf`);
-      showNotification(`${type} PDF exported successfully!`);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      showNotification('Error generating PDF', 'error');
-    } finally {
-      setExportingPDF(false);
-    }
-  };
-
-  const generateSummaryPDF = (pdf, startY) => {
-    let y = startY;
+  //     if (student.status === 'pending') {
+  //       groupedByClass[classId].pending += 1;
+  //     } else if (student.status === 'approved') {
+  //       groupedByClass[classId].approved += 1;
+  //       groupedByClass[classId].revenue += student.amountPaid || 0;
+  //     }
+  //   });
     
-    // Key Metrics
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Key Metrics', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    
-    const metrics = [
-      `Total Classes: ${classes.length}`,
-      `Active Classes: ${classes.filter(c => c.status === 'active').length}`,
-      `Archived Classes: ${classes.filter(c => c.status === 'archived').length}`,
-      `Total Students: ${approvedRegistrations.length}`,
-      `Pending Approvals: ${pendingRegistrations.length}`,
-      `Total Revenue: R${totalRevenue.toFixed(2)}`,
-      `Pending Revenue: R${pendingRevenue.toFixed(2)}`,
-      `Average Revenue per Student: R${approvedRegistrations.length > 0 ? (totalRevenue / approvedRegistrations.length).toFixed(2) : '0.00'}`
-    ];
-    
-    metrics.forEach(metric => {
-      pdf.text(metric, 20, y);
-      y += 7;
-    });
-    
-    y += 10;
-    
-    // Class Performance Table
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Class Performance', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(8);
-    const headers = ['Class Name', 'Status', 'Students', 'Revenue', 'Capacity'];
-    let x = 20;
-    
-    // Headers
-    headers.forEach(header => {
-      pdf.setFont(undefined, 'bold');
-      pdf.text(header, x, y);
-      x += 35;
-    });
-    
-    y += 7;
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(20, y, 190, y);
-    y += 4;
-    
-    // Rows
-    pdf.setFont(undefined, 'normal');
-    classes.forEach(classItem => {
-      const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-      const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-      const capacity = classItem.capacity || 'Unlimited';
-      
-      x = 20;
-      const row = [
-        classItem.name.substring(0, 15) + (classItem.name.length > 15 ? '...' : ''),
-        classItem.status || 'active',
-        classStudents.length.toString(),
-        `R${classRevenue.toFixed(2)}`,
-        capacity.toString()
-      ];
-      
-      row.forEach(cell => {
-        pdf.text(cell, x, y);
-        x += 35;
-      });
-      
-      y += 6;
-      
-      // Add new page if needed
-      if (y > 270) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
-  };
-
-  const generateRegistrationsPDF = (pdf, startY) => {
-    let y = startY;
-    
-    // Registration Summary
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Registration Summary', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    
-    const summary = [
-      `Total Registrations: ${approvedRegistrations.length + pendingRegistrations.length}`,
-      `Approved: ${approvedRegistrations.length}`,
-      `Pending: ${pendingRegistrations.length}`,
-      `Approval Rate: ${approvedRegistrations.length > 0 ? ((approvedRegistrations.length / (approvedRegistrations.length + pendingRegistrations.length)) * 100).toFixed(1) : 0}%`
-    ];
-    
-    summary.forEach(item => {
-      pdf.text(item, 20, y);
-      y += 7;
-    });
-    
-    y += 10;
-    
-    // Recent Registrations Table
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Recent Registrations', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(8);
-    const headers = ['Name', 'Class', 'Amount', 'Status', 'Date'];
-    let x = 20;
-    const colWidths = [40, 40, 30, 30, 30];
-    
-    // Headers
-    headers.forEach((header, i) => {
-      pdf.setFont(undefined, 'bold');
-      pdf.text(header, x, y);
-      x += colWidths[i];
-    });
-    
-    y += 7;
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(20, y, 190, y);
-    y += 4;
-    
-    // Rows (limit to 20 most recent)
-    const allRegistrations = [...approvedRegistrations, ...pendingRegistrations];
-    const recentRegistrations = allRegistrations
-      .sort((a, b) => new Date(b.paymentDate || b.createdAt) - new Date(a.paymentDate || a.createdAt))
-      .slice(0, 20);
-    
-    recentRegistrations.forEach(reg => {
-      x = 20;
-      const row = [
-        reg.studentName?.substring(0, 15) + (reg.studentName?.length > 15 ? '...' : '') || 'N/A',
-        reg.class?.name?.substring(0, 15) + (reg.class?.name?.length > 15 ? '...' : '') || 'N/A',
-        `R${reg.amountPaid || 0}`,
-        reg.status,
-        reg.paymentDate || 'N/A'
-      ];
-      
-      row.forEach((cell, i) => {
-        pdf.text(cell, x, y);
-        x += colWidths[i];
-      });
-      
-      y += 6;
-      
-      if (y > 270) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
-  };
-
-  const generateRevenuePDF = (pdf, startY) => {
-    let y = startY;
-    
-    // Revenue Summary
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Revenue Analysis', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-    
-    const summary = [
-      `Total Revenue: R${totalRevenue.toFixed(2)}`,
-      `Pending Revenue: R${pendingRevenue.toFixed(2)}`,
-      `Average Payment: R${approvedRegistrations.length > 0 ? (totalRevenue / approvedRegistrations.length).toFixed(2) : '0.00'}`,
-      `Total Transactions: ${approvedRegistrations.length}`
-    ];
-    
-    summary.forEach(item => {
-      pdf.text(item, 20, y);
-      y += 7;
-    });
-    
-    y += 10;
-    
-    // Revenue by Class
-    pdf.setFontSize(16);
-    pdf.setTextColor(44, 62, 80);
-    pdf.text('Revenue by Class', 20, y);
-    y += 10;
-    
-    pdf.setFontSize(8);
-    const headers = ['Class Name', 'Students', 'Revenue', 'Avg/Student', 'Status'];
-    let x = 20;
-    const colWidths = [40, 25, 35, 35, 25];
-    
-    // Headers
-    headers.forEach((header, i) => {
-      pdf.setFont(undefined, 'bold');
-      pdf.text(header, x, y);
-      x += colWidths[i];
-    });
-    
-    y += 7;
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(20, y, 190, y);
-    y += 4;
-    
-    // Rows
-    pdf.setFont(undefined, 'normal');
-    const revenueByClass = classes.map(classItem => {
-      const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-      const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-      const avgRevenue = classStudents.length > 0 ? classRevenue / classStudents.length : 0;
-      
-      return {
-        name: classItem.name,
-        students: classStudents.length,
-        revenue: classRevenue,
-        avgRevenue: avgRevenue,
-        status: classItem.status || 'active'
-      };
-    }).sort((a, b) => b.revenue - a.revenue);
-    
-    revenueByClass.forEach(item => {
-      x = 20;
-      const row = [
-        item.name.substring(0, 15) + (item.name.length > 15 ? '...' : ''),
-        item.students.toString(),
-        `R${item.revenue.toFixed(2)}`,
-        `R${item.avgRevenue.toFixed(2)}`,
-        item.status
-      ];
-      
-      row.forEach((cell, i) => {
-        pdf.text(cell, x, y);
-        x += colWidths[i];
-      });
-      
-      y += 6;
-      
-      if (y > 270) {
-        pdf.addPage();
-        y = 20;
-      }
-    });
-  };
+  //   return Object.values(groupedByClass);
+  // };
 
   // Analytics Calculations
   const totalRevenue = approvedRegistrations.reduce((sum, reg) => sum + (reg.amountPaid || 0), 0);
-  const pendingRevenue = pendingRegistrations.reduce((sum, reg) => sum + (reg.amountPaid || 0), 0);
+  // const pendingRevenue = pendingRegistrations.reduce((sum, reg) => sum + (reg.amountPaid || 0), 0);
   const totalStudents = approvedRegistrations.length;
   const allRegistrations = [...pendingRegistrations, ...approvedRegistrations];
+  // const studentsByClass = getStudentsByClass();
 
   return (
     <div className="dashboard">
@@ -752,42 +485,41 @@ function OrgAdminDashboard() {
       </nav>
 
       <div className="dashboard-content">
-        {/* Analytics Overview */}
-        <section className="analytics-section">
-          <h2>Business Overview</h2>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon">🏢</div>
-              <div className="stat-content">
-                <div className="stat-number">{classes.length}</div>
-                <div className="stat-label">Total Classes</div>
+        {/* Compact Business Overview */}
+        <section className="compact-analytics-section">
+          <div className="compact-stats">
+            <div className="compact-stat">
+              <span className="compact-stat-icon">🏢</span>
+              <div>
+                <div className="compact-stat-number">{classes.length}</div>
+                <div className="compact-stat-label">Classes</div>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">👥</div>
-              <div className="stat-content">
-                <div className="stat-number">{totalStudents}</div>
-                <div className="stat-label">Total Students</div>
+            <div className="compact-stat">
+              <span className="compact-stat-icon">👥</span>
+              <div>
+                <div className="compact-stat-number">{totalStudents}</div>
+                <div className="compact-stat-label">Students</div>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">💰</div>
-              <div className="stat-content">
-                <div className="stat-number">R{totalRevenue.toFixed(2)}</div>
-                <div className="stat-label">Total Revenue</div>
+            <div className="compact-stat">
+              <span className="compact-stat-icon">💰</span>
+              <div>
+                <div className="compact-stat-number">R{totalRevenue.toFixed(2)}</div>
+                <div className="compact-stat-label">Revenue</div>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">⏳</div>
-              <div className="stat-content">
-                <div className="stat-number">{pendingRegistrations.length}</div>
-                <div className="stat-label">Pending Approvals</div>
+            <div className="compact-stat">
+              <span className="compact-stat-icon">⏳</span>
+              <div>
+                <div className="compact-stat-number">{pendingRegistrations.length}</div>
+                <div className="compact-stat-label">Pending</div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Desktop Tabs (Visible on desktop) */}
+        {/* Desktop Tabs */}
         <div className="desktop-tabs">
           <div className="tabs">
             <button 
@@ -864,24 +596,10 @@ function OrgAdminDashboard() {
                             <span className="value">{classItem.capacity} students</span>
                           </div>
                         )}
-                        {classItem.schedule && (
-                          <div className="info-item">
-                            <span className="label">Schedule:</span>
-                            <span className="value">{classItem.schedule}</span>
-                          </div>
-                        )}
                         <div className="info-item">
                           <span className="label">Enrolled:</span>
                           <span className="value">{classItem.enrolledCount || 0} students</span>
                         </div>
-                        {classItem.registrationLink && (
-                          <div className="info-item">
-                            <span className="label">Registration Link:</span>
-                            <span className="value code" style={{fontSize: '0.7rem'}}>
-                              {classItem.registrationLink.substring(0, 40)}...
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
                     
@@ -927,279 +645,381 @@ function OrgAdminDashboard() {
           </section>
         )}
 
-        {activeTab === 'students' && (
-          <section className="section">
-            <div className="section-header">
-              <h2>All Students</h2>
-              <div className="filters">
-                <select className="form-control form-control-sm" style={{width: '200px'}}>
-                  <option value="all">All Classes</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <select className="form-control form-control-sm" style={{width: '150px'}}>
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
-            </div>
+     {activeTab === 'students' && (
+  <section className="section">
+    <div className="section-header">
+      <h2>All Students</h2>
+      <div className="filters">
+        <select className="form-control form-control-sm" style={{width: '200px'}}>
+          <option value="all">All Classes</option>
+          {classes.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <select className="form-control form-control-sm" style={{width: '150px'}}>
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+        </select>
+      </div>
+    </div>
 
-            {allRegistrations.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">👥</div>
-                <h3>No students yet</h3>
-                <p>Students will appear here when they register for your classes.</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="students-table">
-                  <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Class</th>
-                      <th>Payment</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allRegistrations.map(student => {
-                      const isPending = student.status === 'pending';
-                      const isRejected = student.status === 'rejected';
-                      
-                      return (
-                        <tr key={student.id} className={isPending ? 'pending-row' : isRejected ? 'rejected-row' : 'approved-row'}>
-                          <td>
-                            <div className="student-info">
-                              <div className="student-name">{student.studentName}</div>
-                              <div className="student-email">{student.studentEmail}</div>
-                              <div className="student-phone">{student.studentPhone}</div>
-                            </div>
-                          </td>
-                          <td>{student.class?.name || 'Unknown Class'}</td>
-                          <td>
-                            <div>R{student.amountPaid || 0}</div>
-                            <div className="payment-date">{student.paymentDate}</div>
-                          </td>
-                          <td>
-                            <span className={`status-badge status-${student.status}`}>
-                              {student.status}
-                            </span>
-                          </td>
-                          <td>
-                            {isPending ? (
-                              <button 
-                                className="btn btn-warning btn-sm"
-                                onClick={() => handleViewStudentDetails(student)}
-                              >
-                                Review
-                              </button>
-                            ) : (
-                              <span className="text-muted">Reviewed</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'reports' && (
-          <section className="section">
-            <div className="section-header">
-              <h2>Reports & Analytics</h2>
-              <div className="revenue-badge">
-                Total Revenue: R{totalRevenue.toFixed(2)}
-              </div>
-            </div>
-
-            {/* Report Cards */}
-            <div className="report-cards-grid">
-              <div className="report-card">
-                <h3>📊 Business Summary</h3>
-                <div className="report-metrics">
-                  <div className="metric-row">
-                    <span className="metric-label">Total Classes</span>
-                    <span className="metric-value">{classes.length}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Active Classes</span>
-                    <span className="metric-value">{classes.filter(c => c.status === 'active').length}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Total Students</span>
-                    <span className="metric-value">{totalStudents}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Pending Approvals</span>
-                    <span className="metric-value">{pendingRegistrations.length}</span>
-                  </div>
-                </div>
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => exportToPDF('summary')}
-                  disabled={exportingPDF}
-                >
-                  {exportingPDF ? 'Generating...' : '📥 Download Summary PDF'}
-                </button>
-              </div>
-
-              <div className="report-card">
-                <h3>👥 Student Registrations</h3>
-                <div className="report-metrics">
-                  <div className="metric-row">
-                    <span className="metric-label">Total Registrations</span>
-                    <span className="metric-value">{allRegistrations.length}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Approved</span>
-                    <span className="metric-value">{approvedRegistrations.length}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Pending</span>
-                    <span className="metric-value">{pendingRegistrations.length}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Approval Rate</span>
-                    <span className="metric-value">
-                      {allRegistrations.length > 0 
-                        ? `${((approvedRegistrations.length / allRegistrations.length) * 100).toFixed(1)}%`
-                        : '0%'}
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => exportToPDF('registrations')}
-                  disabled={exportingPDF}
-                >
-                  {exportingPDF ? 'Generating...' : '📥 Download Registrations PDF'}
-                </button>
-              </div>
-
-              <div className="report-card">
-                <h3>💰 Revenue Analysis</h3>
-                <div className="report-metrics">
-                  <div className="metric-row">
-                    <span className="metric-label">Total Revenue</span>
-                    <span className="metric-value">R{totalRevenue.toFixed(2)}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Pending Revenue</span>
-                    <span className="metric-value">R{pendingRevenue.toFixed(2)}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Average Payment</span>
-                    <span className="metric-value">
-                      R{approvedRegistrations.length > 0 
-                        ? (totalRevenue / approvedRegistrations.length).toFixed(2) 
-                        : '0.00'}
-                    </span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="metric-label">Transactions</span>
-                    <span className="metric-value">{approvedRegistrations.length}</span>
-                  </div>
-                </div>
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => exportToPDF('revenue')}
-                  disabled={exportingPDF}
-                >
-                  {exportingPDF ? 'Generating...' : '📥 Download Revenue PDF'}
-                </button>
-              </div>
-            </div>
-
-            {/* Detailed Reports Section */}
-            <div className="detailed-reports">
-              <h3>Detailed Reports</h3>
+    {allRegistrations.length === 0 ? (
+      <div className="empty-state">
+        <div className="empty-icon">👥</div>
+        <h3>No students yet</h3>
+        <p>Students will appear here when they register for your classes.</p>
+      </div>
+    ) : (
+      <div className="table-container">
+        <table className="students-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Class</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRegistrations.map(student => {
+              const isPending = student.status === 'pending';
               
-              {/* Class Performance Table */}
-              <div className="report-section">
-                <h4>🎓 Class Performance</h4>
-                <div className="table-container">
-                  <table className="report-table">
-                    <thead>
-                      <tr>
-                        <th>Class Name</th>
-                        <th>Status</th>
-                        <th>Students</th>
-                        <th>Revenue</th>
-                        <th>Average/Student</th>
-                        <th>Attendance Rate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {classes.map(classItem => {
-                        const classStudents = approvedRegistrations.filter(reg => reg.classId === classItem.id);
-                        const presentCount = classStudents.filter(s => s.attended === true).length;
-                        const classRevenue = classStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
-                        const avgRevenue = classStudents.length > 0 ? classRevenue / classStudents.length : 0;
-                        const attendanceRate = classStudents.length > 0 
-                          ? ((presentCount / classStudents.length) * 100).toFixed(1) 
-                          : 0;
+              return (
+                <tr key={student.id} className={isPending ? 'pending-row' : 'approved-row'}>
+                  <td>
+                    <div className="student-info">
+                      <div className="student-name">{student.studentName}</div>
+                      <div className="student-phone">{student.studentPhone}</div>
+                    </div>
+                  </td>
+                  <td>{student.className || student.class?.name || 'Unknown Class'}</td>
+                  <td>
+                    <div>R{student.amountPaid || student.paymentAmount || 0}</div>
+                    <div className="payment-date">
+                      {student.paymentDate?.toDate 
+                        ? student.paymentDate.toDate().toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })
+                        : 'N/A'}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`status-badge status-${student.status || 'pending'}`}>
+                      {student.status || 'pending'}
+                    </span>
+                  </td>
+                  <td>
+                    {isPending ? (
+                      <button 
+                        className="btn btn-warning btn-sm"
+                        onClick={() => handleViewStudentDetails(student)}
+                      >
+                        Review
+                      </button>
+                    ) : (
+                      <span className="text-muted">Reviewed</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+)}
+      {activeTab === 'reports' && (
+  <section className="section">
+    <div className="section-header">
+      <h2>Student Registrations by Class</h2>
+      <div className="revenue-badge">
+        Total Revenue: R{totalRevenue.toFixed(2)}
+      </div>
+    </div>
 
-                        return (
-                          <tr key={classItem.id}>
-                            <td className="class-name">{classItem.name}</td>
-                            <td>
-                              <span className={`status-badge status-${classItem.status || 'active'}`}>
-                                {classItem.status || 'active'}
-                              </span>
-                            </td>
-                            <td>{classStudents.length}</td>
-                            <td>R{classRevenue.toFixed(2)}</td>
-                            <td>R{avgRevenue.toFixed(2)}</td>
-                            <td>
-                              <div className="attendance-bar">
-                                <div 
-                                  className="attendance-fill"
-                                  style={{ width: `${attendanceRate}%` }}
-                                ></div>
-                                <span>{attendanceRate}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+    {/* All Classes with Simple Stats and Download */}
+    <div className="all-classes-table-container">
+      <table className="all-classes-table">
+        <thead>
+          <tr>
+            <th>Class Name</th>
+                        <th>Download</th>
+
+            {/* <th>Status</th> */}
+            <th>Total Students</th>
+            {/* <th>Approved</th> */}
+            <th>Revenue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {classes.map((classItem) => {
+            // Get students for this class
+            const classStudents = allRegistrations.filter(student => student.classId === classItem.id);
+            const approvedStudents = classStudents.filter(s => s.status === 'approved');
+            const classRevenue = approvedStudents.reduce((sum, student) => sum + (student.amountPaid || 0), 0);
+            
+            // Function to download class students as CSV
+            // const downloadClassStudentsCSV = () => {
+            //   if (classStudents.length === 0) {
+            //     showNotification('No students to download for this class', 'warning');
+            //     return;
+            //   }
+              
+            //   const headers = ['Student Name', 'Email', 'Phone', 'Status', 'Amount Paid', 'Payment Date', 'Registration Date'];
+              
+            //   const rows = classStudents.map(student => [
+            //     student.studentName || '',
+            //     student.studentEmail || '',
+            //     student.studentPhone || '',
+            //     student.status || '',
+            //     `R${student.amountPaid || 0}`,
+            //     student.paymentDate || '',
+            //     student.createdAt ? new Date(student.createdAt).toLocaleDateString() : ''
+            //   ]);
+              
+            //   const csvContent = [headers, ...rows]
+            //     .map(row => row.map(field => `"${field}"`).join(','))
+            //     .join('\n');
+              
+            //   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            //   const link = document.createElement('a');
+            //   const url = URL.createObjectURL(blob);
+              
+            //   link.setAttribute('href', url);
+            //   link.setAttribute('download', `${classItem.name.replace(/[^a-z0-9]/gi, '-')}-students-${new Date().toISOString().split('T')[0]}.csv`);
+            //   link.style.visibility = 'hidden';
+              
+            //   document.body.appendChild(link);
+            //   link.click();
+            //   document.body.removeChild(link);
+              
+            //   showNotification(`Downloaded ${classStudents.length} students from ${classItem.name}`);
+            // };
+
+            // Function to download class students as PDF
+            const downloadClassStudentsPDF = async () => {
+              if (classStudents.length === 0) {
+                showNotification('No students to download for this class', 'warning');
+                return;
+              }
+              
+              try {
+                const { jsPDF } = await import('jspdf');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                let yPosition = 20;
+                
+                // Header
+                pdf.setFontSize(20);
+                pdf.setTextColor(44, 62, 80);
+                pdf.text(`${classItem.name} - Student List`, 20, yPosition);
+                
+                pdf.setFontSize(12);
+                pdf.setTextColor(128, 128, 128);
+                pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, yPosition + 8);
+                pdf.text(`Total Students: ${classStudents.length}`, 20, yPosition + 16);
+                
+                yPosition += 30;
+                
+                // Student Table Header
+                pdf.setFontSize(14);
+                pdf.setTextColor(44, 62, 80);
+                pdf.text('Student Details:', 20, yPosition);
+                yPosition += 10;
+                
+                pdf.setFontSize(9);
+                pdf.setTextColor(0, 0, 0);
+                const headers = ['Name', 'Email', 'Phone', 'Status', 'Amount'];
+                let x = 20;
+                const colWidths = [40, 50, 35, 25, 20];
+                
+                // Table Headers
+                pdf.setFont(undefined, 'bold');
+                headers.forEach((header, i) => {
+                  pdf.text(header, x, yPosition);
+                  x += colWidths[i];
+                });
+                
+                yPosition += 7;
+                pdf.setDrawColor(200, 200, 200);
+                pdf.line(20, yPosition, 190, yPosition);
+                yPosition += 4;
+                
+                // Table Rows
+                pdf.setFont(undefined, 'normal');
+                classStudents.forEach(student => {
+                  if (yPosition > 270) {
+                    pdf.addPage();
+                    yPosition = 20;
+                  }
+                  
+                  x = 20;
+                  const row = [
+                    student.studentName?.substring(0, 15) || 'N/A',
+                    student.studentEmail?.substring(0, 20) || 'N/A',
+                    student.studentPhone || 'N/A',
+                    student.status,
+                    `R${student.amountPaid || 0}`
+                  ];
+                  
+                  row.forEach((cell, i) => {
+                    pdf.text(cell, x, yPosition);
+                    x += colWidths[i];
+                  });
+                  
+                  yPosition += 6;
+                });
+                
+                // Footer
+                pdf.setPage(pdf.getNumberOfPages());
+                pdf.setFontSize(8);
+                pdf.setTextColor(128, 128, 128);
+                pdf.text(`Page ${pdf.getNumberOfPages()} of ${pdf.getNumberOfPages()}`, 180, 290, { align: 'right' });
+                
+                // Save PDF
+                pdf.save(`${classItem.name.replace(/[^a-z0-9]/gi, '-')}-students-${new Date().toISOString().split('T')[0]}.pdf`);
+                showNotification(`PDF downloaded for ${classItem.name}`);
+              } catch (error) {
+                console.error('Error generating PDF:', error);
+                showNotification('Error generating PDF', 'error');
+              }
+            };
+
+            return (
+              <tr key={classItem.id} className="class-row">
+                <td>
+                  <div className="class-info-cell">
+                    <div className="class-name">{classItem.name}</div>
+                    <div className="class-meta">
+                      <span className="class-venue">{classItem.venue}</span>
+                      {classItem.startDate && (
+                        <span className="class-date">
+                          {new Date(classItem.startDate).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                 <td>
+                  <div className="download-actions">
+                    {classStudents.length > 0 ? (
+                      <>
+                      
+                        <button 
+                          // className="btn btn-outline btn-sm"
+                                  className="btn btn-primary"
+
+                          onClick={downloadClassStudentsPDF}
+                          title="Download as PDF"
+                        >
+                          Download PDF
+                        </button>
+                      </>
+                    ) : (
+                      <span className="no-students">No students</span>
+                    )}
+                  </div>
+                </td>
+                {/* <td>
+                  <span className={`status-badge status-${classItem.status || 'active'}`}>
+                    {classItem.status || 'active'}gg
+                  </span>
+                </td> */}
+                <td>
+                  <div className="student-count-cell">
+                    <span className="student-count">{classStudents.length}</span>
+                  </div>
+                </td>
+                {/* <td>
+                  <div className="approved-count-cell">
+                    <span className="approved-count">{approvedStudents.length}</span>
+                  </div>
+                </td> */}
+                <td>
+                  <div className="revenue-cell">
+                    <span className="revenue-amount">R{classRevenue.toFixed(2)}</span>
+                  </div>
+                </td>
+               
+              </tr>
+            );
+          })}
+          
+          {classes.length === 0 && (
+            <tr>
+              <td colSpan="6">
+                <div className="empty-state">
+                  <div className="empty-icon">📊</div>
+                  <h3>No classes yet</h3>
+                  <p>Create classes first to see registration reports.</p>
                 </div>
-              </div>
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
 
-              {/* Quick Export All Button */}
-              <div className="export-all-section">
-                <button 
-                  className="btn btn-primary btn-lg"
-                  onClick={async () => {
-                    setExportingPDF(true);
-                    await exportToPDF('summary');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    await exportToPDF('registrations');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    await exportToPDF('revenue');
-                    setExportingPDF(false);
-                    showNotification('All reports exported successfully!');
-                  }}
-                  disabled={exportingPDF}
-                >
-                  {exportingPDF ? 'Exporting All Reports...' : '🚀 Export All PDF Reports'}
-                </button>
-                <p className="export-note">
-                  This will generate and download three separate PDF reports: Summary, Registrations, and Revenue Analysis.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
+    {/* Quick Download All */}
+    {/* <div className="download-all-section">
+      <button 
+        className="btn btn-primary"
+        onClick={() => {
+          // Download all classes data as one CSV
+          const headers = ['Class', 'Student Name', 'Email', 'Phone', 'Status', 'Amount Paid', 'Payment Date'];
+          
+          const rows = [];
+          classes.forEach(classItem => {
+            const classStudents = allRegistrations.filter(student => student.classId === classItem.id);
+            classStudents.forEach(student => {
+              rows.push([
+                classItem.name,
+                student.studentName || '',
+                student.studentEmail || '',
+                student.studentPhone || '',
+                student.status || '',
+                `R${student.amountPaid || 0}`,
+                student.paymentDate || ''
+              ]);
+            });
+          });
+          
+          if (rows.length === 0) {
+            showNotification('No students to download', 'warning');
+            return;
+          }
+          
+          const csvContent = [headers, ...rows]
+            .map(row => row.map(field => `"${field}"`).join(','))
+            .join('\n');
+          
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          
+          link.setAttribute('href', url);
+          link.setAttribute('download', `all-classes-students-${new Date().toISOString().split('T')[0]}.csv`);
+          link.style.visibility = 'hidden';
+          
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          showNotification(`Downloaded ${rows.length} students from all classes`);
+        }}
+      >
+        📥 Download All Students (CSV)
+      </button>
+      <p className="download-note">
+        Download all student registrations from all classes in one CSV file.
+      </p>
+    </div> */}
+  </section>
+)}
 
         {/* Mobile Bottom Tabs */}
         <div className="mobile-bottom-tabs">
@@ -1268,14 +1088,10 @@ function OrgAdminDashboard() {
                     </div>
                     <div className="info-item">
                       <span className="label">Payment Date:</span>
-                      <span className="value">{selectedStudent.paymentDate}</span>
+                      <span className="value"> {selectedStudent?.paymentDate?.toDate
+    ? selectedStudent.paymentDate.toDate().toLocaleDateString()
+    : 'N/A'}</span>
                     </div>
-                    {selectedStudent.transactionId && (
-                      <div className="info-item">
-                        <span className="label">Transaction ID:</span>
-                        <span className="value code">{selectedStudent.transactionId}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1349,7 +1165,6 @@ function OrgAdminDashboard() {
                     onChange={(e) => setClassForm({...classForm, name: e.target.value})}
                     required
                   />
-                  <p className="form-hint">This will be used to generate a clean URL</p>
                 </div>
                 
                 <div className="form-group">
@@ -1389,39 +1204,6 @@ function OrgAdminDashboard() {
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Start Date (Optional)</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={classForm.startDate}
-                      onChange={(e) => setClassForm({...classForm, startDate: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">End Date (Optional)</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={classForm.endDate}
-                      onChange={(e) => setClassForm({...classForm, endDate: e.target.value})}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Schedule (Optional)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g., Mon-Wed-Fri, 6-8 PM"
-                    value={classForm.schedule}
-                    onChange={(e) => setClassForm({...classForm, schedule: e.target.value})}
-                  />
-                </div>
-                
                 <div className="form-group">
                   <label className="form-label">Venue/Location *</label>
                   <input
@@ -1432,7 +1214,6 @@ function OrgAdminDashboard() {
                     onChange={(e) => setClassForm({...classForm, venue: e.target.value})}
                     required
                   />
-                  <p className="form-hint">This will be used in the registration URL</p>
                 </div>
                 
                 <div className="form-group">
@@ -1444,7 +1225,6 @@ function OrgAdminDashboard() {
                     onChange={(e) => setClassForm({...classForm, paymentInstructions: e.target.value})}
                     required
                   />
-                  <p className="form-hint">These instructions will be shown to students during registration</p>
                 </div>
                 
                 <div className="form-actions">

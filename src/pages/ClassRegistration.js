@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { v4 as uuidv4 } from 'uuid';
+import './css/ClassRegistration.css';
+
 
 function ClassRegistration() {
   const { businessSlug, courseSlug, venue, date } = useParams();
