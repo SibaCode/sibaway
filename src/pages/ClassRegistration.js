@@ -358,70 +358,58 @@ function ClassRegistration() {
   }
 
   if (submitted) {
-    return (
-      <div className="class-registration">
-        <div className="registration-container">
-          <div className="success-page">
-            <div className="success-icon">✅</div>
-            <h1>Registration Complete!</h1>
-            <p className="success-subtitle">Thank you for registering for {classData.name}</p>
-            
-            <div className="reference-section">
-              <div className="reference-header">
-                <span className="reference-icon">📋</span>
-                <h3>Your Reference Number</h3>
-              </div>
-              <div className="reference-number">{referenceNumber}</div>
-              <p className="reference-note">
-                Please save this reference number for future communications.
-              </p>
-            </div>
-            
-            <div className="success-summary">
-              <h4>Registration Details</h4>
-              <div className="summary-item">
-                <strong>Student:</strong> {formData.name}
-              </div>
-              <div className="summary-item">
-                <strong>Class:</strong> {classData.name}
-              </div>
-              <div className="summary-item">
-                <strong>Class Date:</strong> {classData.startDate ? formatDate(classData.startDate) : 'To be announced'}
-              </div>
-              <div className="summary-item">
-                <strong>Amount Paid:</strong> R{paymentAmount}
-              </div>
-              <div className="summary-item">
-                <strong>Phone:</strong> {formData.phone}
-              </div>
-            </div>
-
-            <div className="next-steps">
-              <h4>What happens next?</h4>
-              <ul>
-                <li>Your registration is now <strong>pending verification</strong></li>
-                <li>We will verify your payment proof within 24-48 hours</li>
-                <li>You will receive a confirmation SMS once verified</li>
-                <li>Keep your reference number for any inquiries</li>
-              </ul>
-            </div>
-
-            <div className="contact-info">
-              <p><strong>Questions?</strong> Contact {businessData?.adminName} at {businessData?.email}</p>
-              <p className="reference-display">Reference: <strong>{referenceNumber}</strong></p>
-            </div>
-            
-            <button 
-              onClick={() => window.print()} 
-              className="btn btn-secondary print-btn"
-            >
-              Print this page
-            </button>
+  return (
+    <div className="class-registration">
+      <div className="registration-container">
+        <div className="success-page">
+          
+          <div className="success-header">
+            <div className="success-check">✓</div>
+            <h1>Registration Submitted</h1>
+            <p>Thank you for registering for {classData.name}</p>
           </div>
+
+          <div className="reference-box">
+            <h3>Your Reference Number</h3>
+            <div className="reference-number">{referenceNumber}</div>
+            <p className="reference-hint">Save this number for your records</p>
+          </div>
+
+          <div className="summary-box">
+            <h3>Your Details</h3>
+            <div className="summary-grid">
+              <div className="summary-item">
+                <span className="label">Name:</span>
+                <span className="value">{formData.name}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Phone:</span>
+                <span className="value">{formData.phone}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Class Date:</span>
+                <span className="value">{classData.startDate ? formatDate(classData.startDate) : 'TBA'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="next-box">
+            <h3>What happens next?</h3>
+            <p>We'll verify your payment and send you an SMS confirmation within 24-48 hours.</p>
+          </div>
+
+          <div className="contact-box">
+            <p><strong>Questions?</strong> Contact {businessData?.adminName}</p>
+            <div className="reference-small">
+              Reference: <strong>{referenceNumber}</strong>
+            </div>
+          </div>
+
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="class-registration">
@@ -513,7 +501,7 @@ function ClassRegistration() {
             <div className="form-group">
               <label>Amount Paid *</label>
               <div className="amount-input-container">
-                <span className="currency-prefix">R</span>
+                <span className="currency-prefix"></span>
                 <input
                   type="number"
                   step="0.01"

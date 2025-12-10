@@ -151,3 +151,166 @@
     padding: 20px 15px;
   }
 }
+/* Success Page - Minimal Styles */
+.success-page {
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.success-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.success-check {
+  font-size: 50px;
+  color: #10b981;
+  margin-bottom: 15px;
+}
+
+.success-header h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.success-header p {
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.reference-box {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.reference-box h3 {
+  font-size: 16px;
+  color: #0369a1;
+  margin-bottom: 10px;
+}
+
+.reference-number {
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: bold;
+  color: #1e40af;
+  background: white;
+  padding: 10px;
+  border-radius: 6px;
+  margin: 10px 0;
+  border: 1px solid #dbeafe;
+}
+
+.reference-hint {
+  font-size: 14px;
+  color: #64748b;
+  margin-top: 8px;
+}
+
+.summary-box {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.summary-box h3 {
+  font-size: 16px;
+  color: #1f2937;
+  margin-bottom: 15px;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.summary-item .label {
+  color: #6b7280;
+}
+
+.summary-item .value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.next-box {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.next-box h3 {
+  font-size: 16px;
+  color: #92400e;
+  margin-bottom: 10px;
+}
+
+.next-box p {
+  color: #78350f;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.contact-box {
+  text-align: center;
+  padding: 15px;
+  background: #f9fafb;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+.contact-box p {
+  color: #6b7280;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.reference-small {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: #4b5563;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  display: inline-block;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .success-page {
+    padding: 15px;
+  }
+  
+  .reference-number {
+    font-size: 16px;
+    word-break: break-all;
+  }
+  
+  .summary-item {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

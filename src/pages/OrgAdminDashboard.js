@@ -472,7 +472,7 @@ function OrgAdminDashboard() {
           <button onClick={() => setNotification({ show: false, message: '', type: '' })}>×</button>
         </div>
       )}
-
+{/* 
       <nav className="navbar">
         <div className="navbar-brand">
           <span>🚀 SibaWay Business</span>
@@ -482,7 +482,32 @@ function OrgAdminDashboard() {
             Logout ({userData?.name || 'User'})
           </button>
         </div>
-      </nav>
+      </nav> */}
+
+      <nav className="navbar">
+  <div className="navbar-brand">
+    <div className="navbar-logo">
+      <span className="navbar-logo-icon">🚀</span>
+      <div className="navbar-greeting">
+        <div className="business-name">
+          {userData?.organizationName || 'My Business'}
+        </div>
+        <div className="welcome-message">
+          Welcome to SibaWay Business
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div className="navbar-actions">
+    <div className="user-info">
+      <span className="user-greeting">Hi, {userData?.name || 'User'}</span>
+    </div>
+    <button onClick={logout} className="btn btn-outline btn-sm logout-btn">
+      Logout
+    </button>
+  </div>
+</nav>
 
       <div className="dashboard-content">
         {/* Compact Business Overview */}
